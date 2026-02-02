@@ -2,33 +2,23 @@ import { useState } from 'react'
 import { Routes, Route, NavLink } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { cn } from '../lib/utils'
-import { Users, UsersRound, Settings, FileText, UserCheck, AlertCircle, XCircle, Calendar, Phone } from 'lucide-react'
+import {
+  Users,
+  UsersRound,
+  Settings,
+  FileText,
+  UserCheck,
+  AlertCircle,
+  XCircle,
+  Phone,
+  Trash2,
+  Save,
+} from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Select from '../components/ui/Select'
-import Input from '../components/ui/Input'
-
-interface User {
-  id: number
-  email: string
-  firstName: string
-  lastName: string
-  role: string
-  status: string
-  teamId: number | null
-  phoneNumber?: string | null
-  startDate?: string | null
-  approvedById?: number | null
-  approvedAt?: string | null
-  adminNotes?: string | null
-  createdAt?: string | null
-}
-
-interface Team {
-  id: number
-  name: string
-  leadUserId: number | null
-}
+import { useAuth } from '../hooks/useAuth'
+import type { User, Team, KPIConfigItem, AuditLogEntry, UserRole } from '../types'
 
 function AdminNav() {
   const { data: pendingUsers } = useQuery({
@@ -78,6 +68,7 @@ function AdminNav() {
 }
 
 function UsersManagement() {
+  const { user: currentUser } = useAuth()
   const queryClient = useQueryClient()
   const [approvalRole, setApprovalRole] = useState<Record<number, string>>({})
   const [approvalTeam, setApprovalTeam] = useState<Record<number, string>>({})
@@ -85,6 +76,7 @@ function UsersManagement() {
   const [approvalNotes, setApprovalNotes] = useState<Record<number, string>>({})
   const [rejectReason, setRejectReason] = useState<Record<number, string>>({})
   const [showRejectForm, setShowRejectForm] = useState<Record<number, boolean>>({})
+  const [userEdits, setUserEdits] = useState<Record<number, Partial<User>>>({})
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin', 'users'],
@@ -164,15 +156,62 @@ function UsersManagement() {
     },
   })
 
+  const updateUserMutation = useMutation({
+    mutationFn: async ({ userId, payload }: { userId: number; payload: Partial<User> }) => {
+      const body: Record<string, unknown> = {}
+      if (payload.role) body.role = payload.role
+      if (payload.status) body.status = payload.status
+      if (payload.teamId !== undefined) body.teamId = payload.teamId
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) throw new Error('Failed to update user')
+      return res.json() as Promise<User>
+    },
+    onSuccess: (_data, variables) => {
+      setUserEdits((prev) => {
+        const next = { ...prev }
+        delete next[variables.userId]
+        return next
+      })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users', 'pending'] })
+    },
+  })
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (!res.ok) throw new Error('Failed to delete user')
+      return true
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'users', 'pending'] })
+    },
+  })
+
   const roleOptions = [
     { value: 'starter', label: 'Starter' },
     { value: 'teamleiter', label: 'Teamleiter' },
     { value: 'admin', label: 'Admin' },
   ]
 
+  const statusOptions = [
+    { value: 'active', label: 'Aktiv' },
+    { value: 'pending', label: 'Ausstehend' },
+    { value: 'inactive', label: 'Inaktiv' },
+  ]
+
   const teamOptions = [
     { value: '', label: 'Kein Team' },
-    ...(teams?.map(t => ({ value: t.id.toString(), label: t.name })) || [])
+    ...(teams?.map(t => ({ value: t.id.toString(), label: t.displayName })) || [])
   ]
 
   const handleApprove = (userId: number) => {
@@ -189,6 +228,50 @@ function UsersManagement() {
       return
     }
     rejectMutation.mutate({ userId, reason })
+  }
+
+  const handleEditChange = (userId: number, field: keyof User, value: string | null) => {
+    let parsed: string | number | null = value
+    if (field === 'teamId') {
+      parsed = value === null || value === '' ? null : Number(value)
+    }
+    setUserEdits((prev) => ({
+      ...prev,
+      [userId]: {
+        ...prev[userId],
+        [field]: parsed,
+      },
+    }))
+  }
+
+  const handleSave = (user: User) => {
+    const edits = userEdits[user.id]
+    if (!edits) return
+    const payload: Partial<User> = {}
+    if (edits.role && edits.role !== user.role) payload.role = edits.role
+    if (edits.status && edits.status !== user.status) payload.status = edits.status
+    if (edits.teamId !== undefined && edits.teamId !== user.teamId) {
+      payload.teamId = edits.teamId
+    }
+    if (Object.keys(payload).length === 0) {
+      setUserEdits((prev) => {
+        const next = { ...prev }
+        delete next[user.id]
+        return next
+      })
+      return
+    }
+    updateUserMutation.mutate({ userId: user.id, payload })
+  }
+
+  const handleDeleteUser = (user: User) => {
+    if (currentUser && currentUser.id === user.id) {
+      alert('Eigener Account kann nicht gelöscht werden.')
+      return
+    }
+    if (window.confirm(`Benutzer ${user.firstName} ${user.lastName} wirklich löschen?`)) {
+      deleteUserMutation.mutate(user.id)
+    }
   }
 
   return (
@@ -238,7 +321,7 @@ function UsersManagement() {
                       />
                       <div className="flex gap-2">
                         <Button
-                          variant="destructive"
+                          variant="danger"
                           onClick={() => handleReject(user.id)}
                           isLoading={rejectMutation.isPending}
                           disabled={!rejectReason[user.id]?.trim()}
@@ -246,7 +329,7 @@ function UsersManagement() {
                           Ablehnen
                         </Button>
                         <Button
-                          variant="outline"
+                          variant="secondary"
                           onClick={() => setShowRejectForm({ ...showRejectForm, [user.id]: false })}
                         >
                           Abbrechen
@@ -297,7 +380,7 @@ function UsersManagement() {
                           Freischalten
                         </Button>
                         <Button
-                          variant="outline"
+                          variant="secondary"
                           onClick={() => setShowRejectForm({ ...showRejectForm, [user.id]: true })}
                         >
                           <XCircle className="h-4 w-4 mr-2" />
@@ -329,7 +412,9 @@ function UsersManagement() {
                     <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">Name</th>
                     <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">E-Mail</th>
                     <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">Rolle</th>
+                    <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">Team</th>
                     <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">Status</th>
+                    <th className="text-right py-3 px-6 text-sm font-medium text-slate-500">Aktionen</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -339,20 +424,61 @@ function UsersManagement() {
                         {user.firstName} {user.lastName}
                       </td>
                       <td className="py-3 px-6 text-sm text-slate-600">{user.email}</td>
-                      <td className="py-3 px-6 text-sm text-slate-600 capitalize">{user.role}</td>
-                      <td className="py-3 px-6 text-sm">
-                        <span className={cn(
-                          'px-2 py-1 rounded-full text-xs font-medium',
-                          user.status === 'active' && 'bg-green-100 text-green-700',
-                          user.status === 'pending' && 'bg-yellow-100 text-yellow-700',
-                          user.status === 'inactive' && 'bg-slate-100 text-slate-700',
-                          user.status === 'locked' && 'bg-red-100 text-red-700'
-                        )}>
-                          {user.status === 'active' && 'Aktiv'}
-                          {user.status === 'pending' && 'Ausstehend'}
-                          {user.status === 'inactive' && 'Inaktiv'}
-                          {user.status === 'locked' && 'Gesperrt'}
-                        </span>
+                      <td className="py-3 px-6 text-sm text-slate-600">
+                        <Select
+                          options={roleOptions}
+                          value={userEdits[user.id]?.role || user.role}
+                          onChange={(e) => handleEditChange(user.id, 'role', e.target.value)}
+                        />
+                      </td>
+                      <td className="py-3 px-6 text-sm text-slate-600">
+                        <Select
+                          options={teamOptions}
+                          value={
+                            userEdits[user.id]?.teamId !== undefined
+                              ? userEdits[user.id]?.teamId === null
+                                ? ''
+                                : String(userEdits[user.id]?.teamId)
+                              : user.teamId !== null && user.teamId !== undefined
+                              ? String(user.teamId)
+                              : ''
+                          }
+                          onChange={(e) =>
+                            handleEditChange(
+                              user.id,
+                              'teamId',
+                              e.target.value === '' ? null : e.target.value
+                            )
+                          }
+                        />
+                      </td>
+                      <td className="py-3 px-6 text-sm text-slate-600">
+                        <Select
+                          options={statusOptions}
+                          value={userEdits[user.id]?.status || user.status}
+                          onChange={(e) => handleEditChange(user.id, 'status', e.target.value)}
+                        />
+                      </td>
+                      <td className="py-3 px-6 text-right text-sm text-slate-600">
+                        <div className="flex items-center gap-2 justify-end">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={!userEdits[user.id]}
+                            onClick={() => handleSave(user)}
+                            isLoading={updateUserMutation.isPending}
+                          >
+                            <Save className="h-4 w-4 mr-1" /> Speichern
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => handleDeleteUser(user)}
+                            isLoading={deleteUserMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" /> Löschen
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -390,16 +516,18 @@ function TeamsManagement() {
               <thead>
                 <tr className="border-b border-slate-200">
                   <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">ID</th>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">Name</th>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">Teamleiter ID</th>
+                  <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">Teamname</th>
+                  <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">Teamleiter</th>
                 </tr>
               </thead>
               <tbody>
                 {teams?.map((team) => (
                   <tr key={team.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-6 text-sm text-slate-600">{team.id}</td>
-                    <td className="py-3 px-6 text-sm font-medium text-slate-900">{team.name}</td>
-                    <td className="py-3 px-6 text-sm text-slate-600">{team.leadUserId || '-'}</td>
+                    <td className="py-3 px-6 text-sm font-medium text-slate-900">{team.displayName}</td>
+                    <td className="py-3 px-6 text-sm text-slate-600">
+                      {team.leadFullName || '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -412,30 +540,244 @@ function TeamsManagement() {
 }
 
 function KPIConfig() {
+  const queryClient = useQueryClient()
+  const [drafts, setDrafts] = useState<Record<string, Partial<KPIConfigItem>>>({})
+  const { data: configs, isLoading } = useQuery({
+    queryKey: ['admin', 'kpi-config'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/kpi-config', { credentials: 'include' })
+      if (!res.ok) throw new Error('KPI-Konfiguration konnte nicht geladen werden')
+      return res.json() as Promise<KPIConfigItem[]>
+    },
+  })
+
+  const mutation = useMutation({
+    mutationFn: async ({ name, payload }: { name: string; payload: Record<string, unknown> }) => {
+      const res = await fetch(`/api/admin/kpi-config/${name}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error('Speichern fehlgeschlagen')
+      return res.json()
+    },
+    onSuccess: (_data, variables) => {
+      setDrafts((prev) => {
+        const next = { ...prev }
+        delete next[variables.name]
+        return next
+      })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'kpi-config'] })
+    },
+  })
+
+  const roleLabels: Record<UserRole, string> = {
+    starter: 'Starter',
+    teamleiter: 'Teamleiter',
+    admin: 'Admin',
+  }
+  const allRoles: UserRole[] = ['starter', 'teamleiter', 'admin']
+
+  const handleThresholdChange = (name: string, field: 'warnThreshold' | 'goodThreshold', value: string) => {
+    const parsed = value === '' ? null : Number(value)
+    setDrafts((prev) => ({
+      ...prev,
+      [name]: {
+        ...prev[name],
+        [field]: Number.isNaN(parsed) ? null : parsed,
+      },
+    }))
+  }
+
+  const toggleVisibility = (name: string, role: UserRole) => {
+    setDrafts((prev) => {
+      const current = prev[name]?.visibility ?? configs?.find((cfg) => cfg.name === name)?.visibility ?? allRoles
+      const exists = current.includes(role)
+      const nextVisibility = exists ? current.filter((r) => r !== role) : [...current, role]
+      return {
+        ...prev,
+        [name]: {
+          ...prev[name],
+          visibility: nextVisibility,
+        },
+      }
+    })
+  }
+
+  const handleSave = (item: KPIConfigItem) => {
+    const draft = drafts[item.name]
+    if (!draft) return
+    const payload: Record<string, unknown> = {}
+    if (draft.label && draft.label !== item.label) payload.label = draft.label
+    if (draft.description !== undefined && draft.description !== item.description) payload.description = draft.description
+    if (draft.warnThreshold !== undefined && draft.warnThreshold !== item.warnThreshold) {
+      payload.warnThreshold = draft.warnThreshold
+    }
+    if (draft.goodThreshold !== undefined && draft.goodThreshold !== item.goodThreshold) {
+      payload.goodThreshold = draft.goodThreshold
+    }
+    if (draft.visibility) {
+      payload.visibility = draft.visibility
+    }
+    mutation.mutate({ name: item.name, payload })
+  }
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>KPI-Konfiguration</CardTitle>
       </CardHeader>
-      <CardContent>
-        <p className="text-slate-500">
-          Schwellenwerte und Sichtbarkeit der KPIs konfigurieren.
-        </p>
+      <CardContent className="p-0">
+        {isLoading ? (
+          <div className="p-6 text-center text-slate-500">Laden...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">KPI</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Warnschwelle</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Grünschwelle</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Sichtbar für</th>
+                  <th className="text-right py-3 px-4 text-sm font-medium text-slate-500">Aktion</th>
+                </tr>
+              </thead>
+              <tbody>
+                {configs?.map((item) => {
+                  const draft = drafts[item.name]
+                  const mergedWarn =
+                    draft?.warnThreshold !== undefined ? draft.warnThreshold : item.warnThreshold
+                  const mergedGood =
+                    draft?.goodThreshold !== undefined ? draft.goodThreshold : item.goodThreshold
+                  const warnValue = mergedWarn === null || mergedWarn === undefined ? '' : mergedWarn
+                  const goodValue = mergedGood === null || mergedGood === undefined ? '' : mergedGood
+                  const visibility = draft?.visibility ?? item.visibility
+                  return (
+                    <tr key={item.name} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="py-3 px-4 text-sm text-slate-900">
+                        <p className="font-medium">{item.label}</p>
+                        <p className="text-xs text-slate-500">{item.description}</p>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-slate-600">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={warnValue}
+                          onChange={(e) => handleThresholdChange(item.name, 'warnThreshold', e.target.value)}
+                          className="w-28 rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                          placeholder="—"
+                        />
+                      </td>
+                      <td className="py-3 px-4 text-sm text-slate-600">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={goodValue}
+                          onChange={(e) => handleThresholdChange(item.name, 'goodThreshold', e.target.value)}
+                          className="w-28 rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                          placeholder="—"
+                        />
+                      </td>
+                      <td className="py-3 px-4 text-sm text-slate-600">
+                        <div className="flex flex-wrap gap-2">
+                          {allRoles.map((role) => (
+                            <label key={role} className="inline-flex items-center gap-1 text-xs font-medium">
+                              <input
+                                type="checkbox"
+                                checked={visibility.includes(role)}
+                                onChange={() => toggleVisibility(item.name, role)}
+                              />
+                              {roleLabels[role]}
+                            </label>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={!draft}
+                          onClick={() => handleSave(item)}
+                          isLoading={mutation.isPending}
+                        >
+                          <Save className="h-4 w-4 mr-1" /> Speichern
+                        </Button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
 }
 
 function AuditLog() {
+  const { data: logs, isLoading } = useQuery({
+    queryKey: ['admin', 'audit-logs'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/audit-logs?limit=100', { credentials: 'include' })
+      if (!res.ok) throw new Error('Audit-Logs konnten nicht geladen werden')
+      return res.json() as Promise<AuditLogEntry[]>
+    },
+  })
+
+  const formatDiff = (diff: string | null) => {
+    if (!diff) return '—'
+    try {
+      const parsed = JSON.parse(diff)
+      return JSON.stringify(parsed, null, 2)
+    } catch {
+      return diff
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Audit-Log</CardTitle>
       </CardHeader>
-      <CardContent>
-        <p className="text-slate-500">
-          Alle Systemaktivitäten protokolliert und durchsuchbar.
-        </p>
+      <CardContent className="p-0">
+        {isLoading ? (
+          <div className="p-6 text-center text-slate-500">Laden...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Zeitpunkt</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">User</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Aktion</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Objekt</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs?.map((log) => (
+                  <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 px-4 text-sm text-slate-600">
+                      {new Date(log.createdAt).toLocaleString('de-AT')}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-slate-600">
+                      {log.actorUserId ? `User #${log.actorUserId}` : 'System'}
+                    </td>
+                    <td className="py-3 px-4 text-sm font-medium text-slate-900 uppercase">{log.action}</td>
+                    <td className="py-3 px-4 text-sm text-slate-600">
+                      {log.objectType || '—'} {log.objectId ? `#${log.objectId}` : ''}
+                    </td>
+                    <td className="py-3 px-4 text-xs text-slate-600">
+                      <pre className="whitespace-pre-wrap break-words">{formatDiff(log.diff)}</pre>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

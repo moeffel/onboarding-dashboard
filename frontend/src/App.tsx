@@ -54,7 +54,7 @@ function AppRoutes() {
       <Route
         path="/dashboard"
         element={
-          <ProtectedRoute allowedRoles={['starter', 'teamleiter', 'admin']}>
+          <ProtectedRoute allowedRoles={['starter', 'admin']}>
             <Layout>
               <StarterDashboard />
             </Layout>

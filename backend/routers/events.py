@@ -6,6 +6,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from database import get_db
 from models import (
@@ -91,6 +92,19 @@ class ClosingEventResponse(BaseModel):
         from_attributes = True
 
 
+class RecentEventResponse(BaseModel):
+    """Schema for recent mixed events."""
+    id: int
+    type: str
+    datetime: datetime
+    title: str
+    meta: Optional[str]
+    notes: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
 @router.post("/call", response_model=CallEventResponse, status_code=status.HTTP_201_CREATED)
 async def create_call_event(
     event_data: CallEventCreate,
@@ -125,6 +139,77 @@ async def create_call_event(
         outcome=event.outcome.value,
         notes=event.notes
     )
+
+
+@router.get("/recent", response_model=list[RecentEventResponse])
+async def get_recent_events(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user = Depends(get_current_user),
+    limit: int = 10,
+):
+    """Return mixed recent events for the current user."""
+    limit = max(1, min(limit, 50))
+
+    call_stmt = (
+        select(CallEvent)
+        .where(CallEvent.user_id == current_user.id)
+        .order_by(CallEvent.datetime.desc())
+        .limit(limit)
+    )
+    appt_stmt = (
+        select(AppointmentEvent)
+        .where(AppointmentEvent.user_id == current_user.id)
+        .order_by(AppointmentEvent.datetime.desc())
+        .limit(limit)
+    )
+    closing_stmt = (
+        select(ClosingEvent)
+        .where(ClosingEvent.user_id == current_user.id)
+        .order_by(ClosingEvent.datetime.desc())
+        .limit(limit)
+    )
+
+    call_result = await db.execute(call_stmt)
+    appt_result = await db.execute(appt_stmt)
+    closing_result = await db.execute(closing_stmt)
+
+    recent: list[RecentEventResponse] = []
+    for event in call_result.scalars():
+        recent.append(
+            RecentEventResponse(
+                id=event.id,
+                type="call",
+                datetime=event.datetime,
+                title=f"Anruf • {event.outcome.value.replace('_', ' ').title()}",
+                meta=event.contact_ref,
+                notes=event.notes,
+            )
+        )
+    for event in appt_result.scalars():
+        recent.append(
+            RecentEventResponse(
+                id=event.id,
+                type="appointment",
+                datetime=event.datetime,
+                title=f"Termin • {event.type.value}",
+                meta=f"Status: {event.result.value}",
+                notes=event.notes,
+            )
+        )
+    for event in closing_result.scalars():
+        recent.append(
+            RecentEventResponse(
+                id=event.id,
+                type="closing",
+                datetime=event.datetime,
+                title="Abschluss",
+                meta=f"{event.units} Units" if event.units is not None else None,
+                notes=event.notes,
+            )
+        )
+
+    recent.sort(key=lambda item: item.datetime, reverse=True)
+    return recent[:limit]
 
 
 @router.post("/appointment", response_model=AppointmentEventResponse, status_code=status.HTTP_201_CREATED)
@@ -197,3 +282,66 @@ async def create_closing_event(
         productCategory=event.product_category,
         notes=event.notes
     )
+
+
+@router.delete("/call/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_call_event(
+    event_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user = Depends(require_roles(UserRole.ADMIN))
+):
+    event = await db.get(CallEvent, event_id)
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event nicht gefunden")
+
+    await log_audit(
+        db,
+        action=AuditAction.DELETE,
+        actor_user_id=current_user.id,
+        object_type="CallEvent",
+        object_id=event.id,
+        diff={"notes": event.notes}
+    )
+    await db.delete(event)
+
+
+@router.delete("/appointment/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_appointment_event(
+    event_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user = Depends(require_roles(UserRole.ADMIN))
+):
+    event = await db.get(AppointmentEvent, event_id)
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event nicht gefunden")
+
+    await log_audit(
+        db,
+        action=AuditAction.DELETE,
+        actor_user_id=current_user.id,
+        object_type="AppointmentEvent",
+        object_id=event.id,
+        diff={"notes": event.notes}
+    )
+    await db.delete(event)
+
+
+@router.delete("/closing/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_closing_event(
+    event_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user = Depends(require_roles(UserRole.ADMIN))
+):
+    event = await db.get(ClosingEvent, event_id)
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event nicht gefunden")
+
+    await log_audit(
+        db,
+        action=AuditAction.DELETE,
+        actor_user_id=current_user.id,
+        object_type="ClosingEvent",
+        object_id=event.id,
+        diff={"units": float(event.units), "notes": event.notes}
+    )
+    await db.delete(event)

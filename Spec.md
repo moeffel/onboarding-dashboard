@@ -306,6 +306,7 @@ Du gibst **immer** (in dieser Reihenfolge) aus:
 - [x] CallEvent, AppointmentEvent, ClosingEvent Models
 - [x] KPI-Calculator Service
 - [x] Admin-Approval & Reject Endpoints
+- [x] Event-Verlauf inkl. `/events/recent` Feed + Lösch-Endpunkte (Call/Appointment/Closing) mit Audit-Log + Rollenprüfung
 - [x] Audit-Logging
 - [x] Rate-Limiting (Login, Register)
 - [x] Session-basierte Auth mit CSRF-Schutz
@@ -314,15 +315,17 @@ Du gibst **immer** (in dieser Reihenfolge) aus:
 - [x] Login/Logout mit Session-Cookie
 - [x] Registrierung mit Consent-Checkboxen
 - [x] Starter-Dashboard mit KPI-Cards
+- [x] Starter-Dashboard: Aktivitätserfassung + Verlauf inkl. Notizanzeige & Self-Service-Löschung
 - [x] Teamleiter-Dashboard mit Team-Übersicht
-- [x] Admin-Console (Users, Teams, Audit)
+- [x] Admin-Console (Users, Teams, Audit) mit Rollen-/Team-/Status-Editing, Pending Approval und Delete-Actions
+- [x] KPI-Konfigurationseditor + Audit-Log Tabelle mit Diff-Anzeige
 - [x] Erweiterter Approval-Workflow (Rolle, Team, Start-Datum, Notizen, Ablehnen)
 
 **Deployment:**
 - [x] Docker Compose (Dev + Prod)
 - [x] PostgreSQL-Support mit Connection Pooling
 - [x] nginx mit SSL/TLS + Security Headers
-- [x] Alembic Migrations (001_initial, 002_enhanced_profile)
+- [x] Alembic Migrations (001_initial, 002_enhanced_profile, 003_add_kpi_config)
 - [x] .env.prod.example Template
 
 **Repository:** https://github.com/moeffel/onboarding-dashboard

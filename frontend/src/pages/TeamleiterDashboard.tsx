@@ -30,6 +30,7 @@ async function fetchTeamKPIs(period: TimePeriod): Promise<TeamKPIsResponse> {
 
 export default function TeamleiterDashboard() {
   const [period, setPeriod] = useState<TimePeriod>('week')
+  const [selectedMemberId, setSelectedMemberId] = useState<string>('all')
 
   const { data: teamData, isLoading, error } = useQuery({
     queryKey: ['kpis', 'team', period],
@@ -75,12 +76,28 @@ export default function TeamleiterDashboard() {
             {teamData?.teamName || 'Team'} - Übersicht und Coaching
           </p>
         </div>
-        <Select
-          options={periodOptions}
-          value={period}
-          onChange={(e) => setPeriod(e.target.value as TimePeriod)}
-          className="w-40"
-        />
+        <div className="flex items-center gap-3">
+          <Select
+            options={periodOptions}
+            value={period}
+            onChange={(e) => setPeriod(e.target.value as TimePeriod)}
+            className="w-40"
+          />
+          {teamData && (
+            <Select
+              options={[
+                { value: 'all', label: 'Alle Mitglieder' },
+                ...teamData.members.map((member) => ({
+                  value: member.userId.toString(),
+                  label: `${member.firstName} ${member.lastName}`,
+                })),
+              ]}
+              value={selectedMemberId}
+              onChange={(e) => setSelectedMemberId(e.target.value)}
+              className="w-48"
+            />
+          )}
+        </div>
       </div>
 
       {isLoading ? (
@@ -124,6 +141,28 @@ export default function TeamleiterDashboard() {
             </div>
           </div>
 
+          {/* Member Drill-down */}
+          {selectedMemberId !== 'all' && (
+            <div>
+              <h3 className="text-sm font-medium text-slate-600 mb-2">
+                Fokus: {teamData.members.find((m) => m.userId.toString() === selectedMemberId)?.firstName}{' '}
+                {teamData.members.find((m) => m.userId.toString() === selectedMemberId)?.lastName}
+              </h3>
+              {teamData.members
+                .filter((member) => member.userId.toString() === selectedMemberId)
+                .map((member) => (
+                  <div key={member.userId} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <KPICard title="Anrufe" value={formatNumber(member.kpis.callsMade)} />
+                    <KPICard title="Pickup-Rate" value={formatPercent(member.kpis.pickupRate)} />
+                    <KPICard title="Ersttermine" value={formatNumber(member.kpis.firstAppointmentsSet)} />
+                    <KPICard title="Ersttermin-Rate" value={formatPercent(member.kpis.firstApptRate)} />
+                    <KPICard title="Abschlüsse" value={formatNumber(member.kpis.closings)} />
+                    <KPICard title="Units" value={formatNumber(member.kpis.unitsTotal, 1)} />
+                  </div>
+                ))}
+            </div>
+          )}
+
           {/* Team Members */}
           <Card>
             <CardHeader>
@@ -147,7 +186,10 @@ export default function TeamleiterDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {teamData.members.map((member) => (
+                    {(selectedMemberId === 'all'
+                      ? teamData.members
+                      : teamData.members.filter((member) => member.userId.toString() === selectedMemberId)
+                    ).map((member) => (
                       <tr key={member.userId} className="border-b border-slate-100 hover:bg-slate-50">
                         <td className="py-3 px-6 text-sm font-medium text-slate-900">
                           {member.firstName} {member.lastName}

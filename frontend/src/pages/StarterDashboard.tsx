@@ -1,12 +1,23 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useMemo } from 'react'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import KPICard from '../components/KPICard'
 import Button from '../components/ui/Button'
 import Select from '../components/ui/Select'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { formatPercent, formatNumber } from '../lib/utils'
-import { TimePeriod, KPIs } from '../types'
-import { Phone, Calendar, Target, Plus } from 'lucide-react'
+import { TimePeriod, KPIs, KPIConfigItem } from '../types'
+import { Phone, Calendar, Target, Plus, Clock, Trash2 } from 'lucide-react'
+import ActivityModal from '../components/ActivityModal'
+import { useAuth } from '../hooks/useAuth'
+
+type RecentEvent = {
+  id: number
+  type: 'call' | 'appointment' | 'closing'
+  datetime: string
+  title: string
+  meta?: string | null
+  notes?: string | null
+}
 
 async function fetchKPIs(period: TimePeriod): Promise<KPIs> {
   const response = await fetch(`/api/kpis/me?period=${period}`, {
@@ -18,10 +29,66 @@ async function fetchKPIs(period: TimePeriod): Promise<KPIs> {
 
 export default function StarterDashboard() {
   const [period, setPeriod] = useState<TimePeriod>('week')
+  const [isModalOpen, setModalOpen] = useState(false)
+  const [modalType, setModalType] = useState<'call' | 'appointment' | 'closing'>('call')
+  const [feedback, setFeedback] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
 
   const { data: kpis, isLoading, error } = useQuery({
     queryKey: ['kpis', 'me', period],
     queryFn: () => fetchKPIs(period),
+  })
+
+  const { data: recentEvents } = useQuery({
+    queryKey: ['events', 'recent'],
+    queryFn: async () => {
+      const response = await fetch('/api/events/recent?limit=5', {
+        credentials: 'include',
+      })
+      if (!response.ok) throw new Error('Aktivitäten konnten nicht geladen werden')
+      return response.json() as Promise<RecentEvent[]>
+    },
+  })
+
+  const { data: kpiConfig } = useQuery({
+    queryKey: ['kpi-config'],
+    queryFn: async () => {
+      const response = await fetch('/api/kpi-config', { credentials: 'include' })
+      if (!response.ok) throw new Error('KPI-Konfiguration konnte nicht geladen werden')
+      return response.json() as Promise<KPIConfigItem[]>
+    },
+  })
+
+  const thresholdMap = useMemo(() => {
+    const map: Record<string, KPIConfigItem> = {}
+    kpiConfig?.forEach((cfg) => {
+      map[cfg.name] = cfg
+    })
+    return map
+  }, [kpiConfig])
+
+  const deleteEventMutation = useMutation({
+    mutationFn: async ({ type, id }: { type: RecentEvent['type']; id: number }) => {
+      const res = await fetch(`/api/events/${type}/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (!res.ok) throw new Error('Löschen fehlgeschlagen')
+      return true
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['events', 'recent'] })
+      queryClient.invalidateQueries({ queryKey: ['kpis', 'me'] })
+      setFeedback('Aktivität gelöscht')
+      setErrorMessage(null)
+      setTimeout(() => setFeedback(null), 3000)
+    },
+    onError: () => {
+      setErrorMessage('Aktivität konnte nicht gelöscht werden.')
+    },
+    meta: { requiresAdmin: true },
   })
 
   const periodOptions = [
@@ -30,17 +97,59 @@ export default function StarterDashboard() {
     { value: 'month', label: 'Dieser Monat' },
   ]
 
-  // Determine KPI variants based on thresholds (example thresholds)
-  const getPickupVariant = (rate: number) => {
-    if (rate >= 0.3) return 'success'
-    if (rate >= 0.2) return 'warning'
-    return 'danger'
+  const getVariantFor = (name: string, value: number) => {
+    const config = thresholdMap[name]
+    if (!config) return 'default'
+    const good = config.goodThreshold ?? null
+    const warn = config.warnThreshold ?? null
+    if (good !== null && value >= good) return 'success'
+    if (warn !== null && value >= warn) return 'warning'
+    if (warn !== null || good !== null) return 'danger'
+    return 'default'
   }
 
-  const getApptVariant = (rate: number) => {
-    if (rate >= 0.15) return 'success'
-    if (rate >= 0.1) return 'warning'
-    return 'danger'
+  const canLogActivity = user?.role === 'starter'
+  const canDeleteActivity = user?.role === 'admin'
+
+  const openModal = (type: 'call' | 'appointment' | 'closing') => {
+    if (!canLogActivity) return
+    setModalType(type)
+    setModalOpen(true)
+  }
+
+  const handleActivitySaved = () => {
+    queryClient.invalidateQueries({ queryKey: ['kpis', 'me'] })
+    queryClient.invalidateQueries({ queryKey: ['events', 'recent'] })
+    setFeedback('Aktivität gespeichert')
+    setTimeout(() => setFeedback(null), 3000)
+  }
+
+  const formatDate = (value: string) => {
+    const date = new Date(value)
+    return date.toLocaleString('de-AT', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  const getEventIcon = (type: RecentEvent['type']) => {
+    switch (type) {
+      case 'appointment':
+        return <Calendar className="h-4 w-4 text-indigo-500" />
+      case 'closing':
+        return <Target className="h-4 w-4 text-emerald-500" />
+      default:
+        return <Phone className="h-4 w-4 text-sky-500" />
+    }
+  }
+
+  const handleDeleteEvent = (event: RecentEvent) => {
+    if (!canDeleteActivity || deleteEventMutation.isPending) return
+    if (window.confirm('Eintrag wirklich löschen?')) {
+      deleteEventMutation.mutate({ type: event.type, id: event.id })
+    }
   }
 
   if (error) {
@@ -66,12 +175,29 @@ export default function StarterDashboard() {
             onChange={(e) => setPeriod(e.target.value as TimePeriod)}
             className="w-40"
           />
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Aktivität erfassen
-          </Button>
+          {canLogActivity && (
+            <Button onClick={() => openModal('call')}>
+              <Plus className="h-4 w-4 mr-2" />
+              Aktivität erfassen
+            </Button>
+          )}
         </div>
       </div>
+      {feedback && (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
+          {feedback}
+        </div>
+      )}
+      {errorMessage && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+          {errorMessage}
+        </div>
+      )}
+      {!canLogActivity && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-600">
+          Historie ist schreibgeschützt. Nur Starter dürfen Aktivitäten erfassen, und nur Admins dürfen Einträge löschen.
+        </div>
+      )}
 
       {/* KPI Cards */}
       {isLoading ? (
@@ -105,7 +231,7 @@ export default function StarterDashboard() {
               <KPICard
                 title="Pickup-Rate"
                 value={formatPercent(kpis.pickupRate)}
-                variant={getPickupVariant(kpis.pickupRate)}
+                variant={getVariantFor('pickup_rate', kpis.pickupRate)}
               />
             </div>
           </div>
@@ -124,7 +250,7 @@ export default function StarterDashboard() {
               <KPICard
                 title="Ersttermin-Rate"
                 value={formatPercent(kpis.firstApptRate)}
-                variant={getApptVariant(kpis.firstApptRate)}
+                variant={getVariantFor('first_appt_rate', kpis.firstApptRate)}
               />
               <KPICard
                 title="Zweittermine vereinbart"
@@ -133,7 +259,7 @@ export default function StarterDashboard() {
               <KPICard
                 title="Zweittermin-Rate"
                 value={formatPercent(kpis.secondApptRate)}
-                variant={getApptVariant(kpis.secondApptRate)}
+                variant={getVariantFor('second_appt_rate', kpis.secondApptRate)}
               />
             </div>
           </div>
@@ -156,6 +282,7 @@ export default function StarterDashboard() {
               <KPICard
                 title="Ø Units pro Abschluss"
                 value={formatNumber(kpis.avgUnitsPerClosing, 2)}
+                variant={getVariantFor('avg_units_per_closing', kpis.avgUnitsPerClosing)}
               />
             </div>
           </div>
@@ -163,36 +290,117 @@ export default function StarterDashboard() {
       ) : null}
 
       {/* Quick Actions */}
+      {canLogActivity && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Schnellerfassung</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Button
+                variant="secondary"
+                className="justify-start h-auto py-4"
+                type="button"
+                onClick={() => openModal('call')}
+              >
+                <Phone className="h-5 w-5 mr-3 text-primary-600" />
+                <div className="text-left">
+                  <p className="font-medium">Anruf erfassen</p>
+                  <p className="text-xs text-slate-500">Telefonate dokumentieren</p>
+                </div>
+              </Button>
+              <Button
+                variant="secondary"
+                className="justify-start h-auto py-4"
+                type="button"
+                onClick={() => openModal('appointment')}
+              >
+                <Calendar className="h-5 w-5 mr-3 text-primary-600" />
+                <div className="text-left">
+                  <p className="font-medium">Termin erfassen</p>
+                  <p className="text-xs text-slate-500">Erst- oder Zweittermin</p>
+                </div>
+              </Button>
+              <Button
+                variant="secondary"
+                className="justify-start h-auto py-4"
+                type="button"
+                onClick={() => openModal('closing')}
+              >
+                <Target className="h-5 w-5 mr-3 text-primary-600" />
+                <div className="text-left">
+                  <p className="font-medium">Abschluss erfassen</p>
+                  <p className="text-xs text-slate-500">Verkauf dokumentieren</p>
+                </div>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle>Schnellerfassung</CardTitle>
+          <div className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-slate-500" />
+            <CardTitle>Zuletzt erfasste Aktivitäten</CardTitle>
+          </div>
+          <p className="text-xs text-slate-500">
+            Änderungen an dieser Historie dürfen nur Admins vornehmen.
+          </p>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button variant="secondary" className="justify-start h-auto py-4">
-              <Phone className="h-5 w-5 mr-3 text-primary-600" />
-              <div className="text-left">
-                <p className="font-medium">Anruf erfassen</p>
-                <p className="text-xs text-slate-500">Telefonate dokumentieren</p>
-              </div>
-            </Button>
-            <Button variant="secondary" className="justify-start h-auto py-4">
-              <Calendar className="h-5 w-5 mr-3 text-primary-600" />
-              <div className="text-left">
-                <p className="font-medium">Termin erfassen</p>
-                <p className="text-xs text-slate-500">Erst- oder Zweittermin</p>
-              </div>
-            </Button>
-            <Button variant="secondary" className="justify-start h-auto py-4">
-              <Target className="h-5 w-5 mr-3 text-primary-600" />
-              <div className="text-left">
-                <p className="font-medium">Abschluss erfassen</p>
-                <p className="text-xs text-slate-500">Verkauf dokumentieren</p>
-              </div>
-            </Button>
-          </div>
+          {recentEvents && recentEvents.length > 0 ? (
+            <div className="space-y-4">
+              {recentEvents.map((event) => (
+                <div
+                  key={`${event.type}-${event.id}`}
+                  className="flex items-start gap-3 border-b border-slate-100 pb-3 last:border-b-0 last:pb-0"
+                >
+                  <div className="mt-1">{getEventIcon(event.type)}</div>
+                  <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">{event.title}</p>
+                          <p className="text-xs text-slate-500">{formatDate(event.datetime)}</p>
+                        </div>
+                        {canDeleteActivity && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteEvent(event)}
+                            disabled={deleteEventMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Löschen
+                          </Button>
+                        )}
+                      </div>
+                    {event.meta && (
+                      <p className="text-xs text-slate-500 mt-1">{event.meta}</p>
+                    )}
+                    {event.notes && (
+                      <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                        {event.notes}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">Noch keine Aktivitäten erfasst.</p>
+          )}
         </CardContent>
       </Card>
+
+      {canLogActivity && (
+        <ActivityModal
+          isOpen={isModalOpen}
+          initialType={modalType}
+          onClose={() => setModalOpen(false)}
+          onSuccess={handleActivitySaved}
+        />
+      )}
     </div>
   )
 }

@@ -109,6 +109,8 @@ class TeamResponse(BaseModel):
     id: int
     name: str
     leadUserId: Optional[int]
+    displayName: str
+    leadFullName: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -410,7 +412,9 @@ async def list_teams(
         TeamResponse(
             id=t.id,
             name=t.name,
-            leadUserId=t.lead_user_id
+            leadUserId=t.lead_user_id,
+            displayName=f"Team {t.lead.first_name} {t.lead.last_name}" if t.lead else t.name,
+            leadFullName=f"{t.lead.first_name} {t.lead.last_name}" if t.lead else None,
         )
         for t in teams
     ]
@@ -441,7 +445,9 @@ async def create_team(
     return TeamResponse(
         id=team.id,
         name=team.name,
-        leadUserId=team.lead_user_id
+        leadUserId=team.lead_user_id,
+        displayName=f"Team {team.lead.first_name} {team.lead.last_name}" if team.lead else team.name,
+        leadFullName=f"{team.lead.first_name} {team.lead.last_name}" if team.lead else None,
     )
 
 
@@ -483,7 +489,9 @@ async def update_team(
     return TeamResponse(
         id=team.id,
         name=team.name,
-        leadUserId=team.lead_user_id
+        leadUserId=team.lead_user_id,
+        displayName=f"Team {team.lead.first_name} {team.lead.last_name}" if team.lead else team.name,
+        leadFullName=f"{team.lead.first_name} {team.lead.last_name}" if team.lead else None,
     )
 
 

@@ -19,12 +19,15 @@ export interface User {
   approvedById?: number | null
   approvedAt?: string | null
   adminNotes?: string | null
+  createdAt?: string | null
 }
 
 export interface Team {
   id: number
   name: string
   leadUserId: number | null
+  displayName: string
+  leadFullName?: string | null
 }
 
 export interface CallEvent {
@@ -68,3 +71,23 @@ export interface KPIs {
 }
 
 export type TimePeriod = 'today' | 'week' | 'month'
+
+export interface KPIConfigItem {
+  name: string
+  label: string
+  description?: string | null
+  formula?: string | null
+  warnThreshold?: number | null
+  goodThreshold?: number | null
+  visibility: UserRole[]
+}
+
+export interface AuditLogEntry {
+  id: number
+  actorUserId: number | null
+  action: string
+  objectType: string | null
+  objectId: number | null
+  diff: string | null
+  createdAt: string
+}

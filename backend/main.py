@@ -11,6 +11,7 @@ from config import get_settings
 from database import init_db
 from services.security import SECURITY_HEADERS
 from routers import auth, events, kpis, admin
+from routers import kpi_config
 
 settings = get_settings()
 
@@ -76,3 +77,4 @@ app.include_router(auth.router)
 app.include_router(events.router)
 app.include_router(kpis.router)
 app.include_router(admin.router)
+app.include_router(kpi_config.router)

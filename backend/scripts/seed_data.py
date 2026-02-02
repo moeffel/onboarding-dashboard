@@ -81,6 +81,8 @@ async def create_seed_data():
         # Set team leads
         teams[0].lead_user_id = teamleiter1.id
         teams[1].lead_user_id = teamleiter2.id
+        teams[0].name = f"Team {teamleiter1.first_name} {teamleiter1.last_name}"
+        teams[1].name = f"Team {teamleiter2.first_name} {teamleiter2.last_name}"
 
         # Create starters
         starters = []
