@@ -32,3 +32,21 @@ ssl/
 
 # OS
 .DS_Store
+
+# Ignore Crew engineering team output
+3_crew/engineering_team/output/
+
+# Ignore memory in sidekick
+memory.db-shm
+memory.db-wal
+memory.db
+
+# Ignore Accounts database in capstone project
+6_mcp/accounts.db
+6_mcp/memory/*.db
+
+# Onboarding Dashboard
+backend/*.db
+backend/onboarding.db
+frontend/node_modules/
+frontend/dist/
