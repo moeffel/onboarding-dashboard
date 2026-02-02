@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+.env
+
+# Database
+*.db
+*.db-journal
+
+# Node
+node_modules/
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Production secrets
+.env.prod
+ssl/
+*.pem
+*.key
+*.crt
+
+# OS
+.DS_Store

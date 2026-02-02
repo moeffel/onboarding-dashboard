@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: onboarding-backend
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./data/onboarding.db
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - DEBUG=false
+      - CORS_ORIGINS=["http://localhost", "http://localhost:3000"]
+    volumes:
+      - backend-data:/app/data
+    expose:
+      - "8000"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: onboarding-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend-data:
