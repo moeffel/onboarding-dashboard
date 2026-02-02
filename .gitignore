@@ -21,7 +21,11 @@ dist/
 
 # Production secrets
 .env.prod
+.env.prod.local
+
+# SSL certificates (keep README)
 ssl/
+!ssl/README.md
 *.pem
 *.key
 *.crt
