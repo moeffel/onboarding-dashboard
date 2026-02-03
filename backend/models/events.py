@@ -13,6 +13,7 @@ class CallOutcome(str, enum.Enum):
     """Possible outcomes for a call event."""
     ANSWERED = "answered"
     NO_ANSWER = "no_answer"
+    DECLINED = "declined"
     BUSY = "busy"
     VOICEMAIL = "voicemail"
     WRONG_NUMBER = "wrong_number"
@@ -45,6 +46,12 @@ class CallEvent(Base):
         index=True
     )
 
+    lead_id: Mapped[int | None] = mapped_column(
+        ForeignKey("leads.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True
+    )
+
     datetime: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -69,6 +76,7 @@ class CallEvent(Base):
 
     # Relationship
     user = relationship("User", lazy="joined")
+    lead = relationship("Lead", lazy="joined")
 
     def __repr__(self) -> str:
         return f"<CallEvent(id={self.id}, outcome={self.outcome.value})>"
@@ -84,6 +92,12 @@ class AppointmentEvent(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
+        index=True
+    )
+
+    lead_id: Mapped[int | None] = mapped_column(
+        ForeignKey("leads.id", ondelete="SET NULL"),
+        nullable=True,
         index=True
     )
 
@@ -114,6 +128,7 @@ class AppointmentEvent(Base):
 
     # Relationship
     user = relationship("User", lazy="joined")
+    lead = relationship("Lead", lazy="joined")
 
     def __repr__(self) -> str:
         return f"<AppointmentEvent(id={self.id}, type={self.type.value}, result={self.result.value})>"
@@ -129,6 +144,12 @@ class ClosingEvent(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
+        index=True
+    )
+
+    lead_id: Mapped[int | None] = mapped_column(
+        ForeignKey("leads.id", ondelete="SET NULL"),
+        nullable=True,
         index=True
     )
 
@@ -157,6 +178,7 @@ class ClosingEvent(Base):
 
     # Relationship
     user = relationship("User", lazy="joined")
+    lead = relationship("Lead", lazy="joined")
 
     def __repr__(self) -> str:
         return f"<ClosingEvent(id={self.id}, units={self.units})>"

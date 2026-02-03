@@ -19,13 +19,21 @@ export default function Layout({ children }: LayoutProps) {
   const location = useLocation()
 
   const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['starter', 'teamleiter', 'admin'] },
+    {
+      name: 'Dashboard',
+      href: '/dashboard',
+      icon: LayoutDashboard,
+      roles: ['starter', 'teamleiter', 'admin'],
+      children: [
+        { name: 'Kunden', href: '/customers', roles: ['starter', 'teamleiter', 'admin'] },
+      ],
+    },
     { name: 'Team', href: '/team', icon: Users, roles: ['teamleiter', 'admin'] },
     { name: 'Admin', href: '/admin', icon: Settings, roles: ['admin'] },
   ]
 
-  const filteredNav = navigation.filter(item =>
-    user && item.roles.includes(user.role)
+  const filteredNav = navigation.filter(
+    (item) => user && item.roles.includes(user.role)
   )
 
   return (
@@ -39,23 +47,44 @@ export default function Layout({ children }: LayoutProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="p-4 space-y-1">
+        <nav className="p-4 space-y-2">
           {filteredNav.map((item) => {
             const isActive = location.pathname.startsWith(item.href)
+            const visibleChildren =
+              item.children?.filter((child) => user && child.roles.includes(user.role)) || []
+
             return (
-              <Link
-                key={item.name}
-                to={item.href}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-primary-50 text-primary-700'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                )}
-              >
-                <item.icon className="h-5 w-5" />
-                {item.name}
-              </Link>
+              <div key={item.name} className="space-y-1">
+                <Link
+                  to={item.href}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                    isActive
+                      ? 'bg-primary-50 text-primary-700'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  )}
+                >
+                  <item.icon className="h-5 w-5" />
+                  {item.name}
+                </Link>
+                {visibleChildren.map((child) => {
+                  const childActive = location.pathname.startsWith(child.href)
+                  return (
+                    <Link
+                      key={child.name}
+                      to={child.href}
+                      className={cn(
+                        'ml-9 flex items-center px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                        childActive
+                          ? 'bg-primary-50 text-primary-700'
+                          : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                      )}
+                    >
+                      {child.name}
+                    </Link>
+                  )
+                })}
+              </div>
             )
           })}
         </nav>

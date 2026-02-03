@@ -13,12 +13,35 @@ from models import (
     CallEvent, CallOutcome,
     AppointmentEvent, AppointmentType, AppointmentResult,
     ClosingEvent,
+    Lead,
+    LeadStatus,
     AuditAction, UserRole
 )
 from routers.auth import get_current_user, require_roles
 from services.auth import log_audit
+from services.lead_status import apply_status_transition
 
 router = APIRouter(prefix="/events", tags=["events"])
+
+
+async def get_accessible_lead(
+    db: AsyncSession,
+    lead_id: int,
+    current_user,
+) -> Lead:
+    lead = await db.get(Lead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lead nicht gefunden")
+
+    if current_user.role == UserRole.ADMIN:
+        return lead
+    if current_user.role == UserRole.TEAMLEITER:
+        if current_user.team_id is None or lead.team_id != current_user.team_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Kein Zugriff")
+        return lead
+    if lead.owner_user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Kein Zugriff")
+    return lead
 
 
 # Request/Response schemas
@@ -28,6 +51,8 @@ class CallEventCreate(BaseModel):
     outcome: CallOutcome
     notes: Optional[str] = Field(None, max_length=1000)
     datetime: Optional[datetime] = None
+    leadId: Optional[int] = None
+    nextCallAt: Optional[datetime] = None
 
 
 class CallEventResponse(BaseModel):
@@ -38,6 +63,7 @@ class CallEventResponse(BaseModel):
     contactRef: Optional[str]
     outcome: str
     notes: Optional[str]
+    leadId: Optional[int]
 
     class Config:
         from_attributes = True
@@ -49,6 +75,7 @@ class AppointmentEventCreate(BaseModel):
     result: AppointmentResult
     notes: Optional[str] = Field(None, max_length=1000)
     datetime: Optional[datetime] = None
+    leadId: Optional[int] = None
 
 
 class AppointmentEventResponse(BaseModel):
@@ -59,6 +86,7 @@ class AppointmentEventResponse(BaseModel):
     datetime: datetime
     result: str
     notes: Optional[str]
+    leadId: Optional[int]
 
     class Config:
         from_attributes = True
@@ -70,6 +98,7 @@ class ClosingEventCreate(BaseModel):
     productCategory: Optional[str] = Field(None, max_length=100)
     notes: Optional[str] = Field(None, max_length=1000)
     datetime: Optional[datetime] = None
+    leadId: Optional[int] = None
 
     @field_validator('units')
     @classmethod
@@ -87,6 +116,7 @@ class ClosingEventResponse(BaseModel):
     units: float
     productCategory: Optional[str]
     notes: Optional[str]
+    leadId: Optional[int]
 
     class Config:
         from_attributes = True
@@ -112,8 +142,15 @@ async def create_call_event(
     current_user = Depends(get_current_user)
 ):
     """Record a call event."""
+    lead_id = None
+    lead = None
+    if event_data.leadId is not None:
+        lead = await get_accessible_lead(db, event_data.leadId, current_user)
+        lead_id = lead.id
+
     event = CallEvent(
         user_id=current_user.id,
+        lead_id=lead_id,
         datetime=event_data.datetime or datetime.utcnow(),
         contact_ref=event_data.contactRef,
         outcome=event_data.outcome,
@@ -121,6 +158,35 @@ async def create_call_event(
     )
     db.add(event)
     await db.flush()
+
+    if lead is not None:
+        if event_data.outcome == CallOutcome.ANSWERED:
+            await apply_status_transition(
+                db,
+                lead,
+                LeadStatus.CONTACT_ESTABLISHED,
+                changed_by_user_id=current_user.id,
+                reason="call_answered",
+            )
+        elif event_data.outcome in {CallOutcome.NO_ANSWER, CallOutcome.BUSY, CallOutcome.VOICEMAIL}:
+            if event_data.nextCallAt is not None:
+                await apply_status_transition(
+                    db,
+                    lead,
+                    LeadStatus.CALL_SCHEDULED,
+                    changed_by_user_id=current_user.id,
+                    reason="callback_scheduled",
+                    meta={"scheduled_for": event_data.nextCallAt.isoformat()},
+                    changed_at=event_data.nextCallAt,
+                )
+        elif event_data.outcome in {CallOutcome.WRONG_NUMBER, CallOutcome.DECLINED}:
+            await apply_status_transition(
+                db,
+                lead,
+                LeadStatus.CLOSED_LOST,
+                changed_by_user_id=current_user.id,
+                reason="call_declined" if event_data.outcome == CallOutcome.DECLINED else "wrong_number",
+            )
 
     # Log audit
     await log_audit(
@@ -137,7 +203,8 @@ async def create_call_event(
         datetime=event.datetime,
         contactRef=event.contact_ref,
         outcome=event.outcome.value,
-        notes=event.notes
+        notes=event.notes,
+        leadId=event.lead_id,
     )
 
 
@@ -219,8 +286,21 @@ async def create_appointment_event(
     current_user = Depends(get_current_user)
 ):
     """Record an appointment event."""
+    lead_id = None
+    lead = None
+    if event_data.leadId is not None:
+        lead = await get_accessible_lead(db, event_data.leadId, current_user)
+        lead_id = lead.id
+
+    if event_data.result == AppointmentResult.SET and event_data.datetime is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Datum ist für vereinbarte Termine erforderlich",
+        )
+
     event = AppointmentEvent(
         user_id=current_user.id,
+        lead_id=lead_id,
         type=event_data.type,
         datetime=event_data.datetime or datetime.utcnow(),
         result=event_data.result,
@@ -228,6 +308,79 @@ async def create_appointment_event(
     )
     db.add(event)
     await db.flush()
+
+    if lead is not None:
+        scheduled_for = event.datetime.isoformat() if event.datetime else None
+        if event.type == AppointmentType.FIRST:
+            if event.result == AppointmentResult.SET:
+                await apply_status_transition(
+                    db,
+                    lead,
+                    LeadStatus.FIRST_APPT_SCHEDULED,
+                    changed_by_user_id=current_user.id,
+                    reason="first_appt_scheduled",
+                    meta={"scheduled_for": scheduled_for},
+                    changed_at=event.datetime,
+                )
+            elif event.result == AppointmentResult.COMPLETED:
+                await apply_status_transition(
+                    db,
+                    lead,
+                    LeadStatus.FIRST_APPT_COMPLETED,
+                    changed_by_user_id=current_user.id,
+                    reason="first_appt_completed",
+                )
+            elif event.result == AppointmentResult.NO_SHOW:
+                await apply_status_transition(
+                    db,
+                    lead,
+                    LeadStatus.FIRST_APPT_SCHEDULED,
+                    changed_by_user_id=current_user.id,
+                    reason="no_show_first",
+                )
+            elif event.result == AppointmentResult.CANCELLED:
+                await apply_status_transition(
+                    db,
+                    lead,
+                    LeadStatus.CLOSED_LOST,
+                    changed_by_user_id=current_user.id,
+                    reason="first_appt_declined",
+                )
+        elif event.type == AppointmentType.SECOND:
+            if event.result == AppointmentResult.SET:
+                await apply_status_transition(
+                    db,
+                    lead,
+                    LeadStatus.SECOND_APPT_SCHEDULED,
+                    changed_by_user_id=current_user.id,
+                    reason="second_appt_scheduled",
+                    meta={"scheduled_for": scheduled_for},
+                    changed_at=event.datetime,
+                )
+            elif event.result == AppointmentResult.COMPLETED:
+                await apply_status_transition(
+                    db,
+                    lead,
+                    LeadStatus.SECOND_APPT_COMPLETED,
+                    changed_by_user_id=current_user.id,
+                    reason="second_appt_completed",
+                )
+            elif event.result == AppointmentResult.NO_SHOW:
+                await apply_status_transition(
+                    db,
+                    lead,
+                    LeadStatus.SECOND_APPT_SCHEDULED,
+                    changed_by_user_id=current_user.id,
+                    reason="no_show_second",
+                )
+            elif event.result == AppointmentResult.CANCELLED:
+                await apply_status_transition(
+                    db,
+                    lead,
+                    LeadStatus.CLOSED_LOST,
+                    changed_by_user_id=current_user.id,
+                    reason="second_appt_declined",
+                )
 
     # Log audit
     await log_audit(
@@ -244,7 +397,8 @@ async def create_appointment_event(
         type=event.type.value,
         datetime=event.datetime,
         result=event.result.value,
-        notes=event.notes
+        notes=event.notes,
+        leadId=event.lead_id,
     )
 
 
@@ -255,8 +409,15 @@ async def create_closing_event(
     current_user = Depends(get_current_user)
 ):
     """Record a closing event."""
+    lead_id = None
+    lead = None
+    if event_data.leadId is not None:
+        lead = await get_accessible_lead(db, event_data.leadId, current_user)
+        lead_id = lead.id
+
     event = ClosingEvent(
         user_id=current_user.id,
+        lead_id=lead_id,
         datetime=event_data.datetime or datetime.utcnow(),
         units=event_data.units,
         product_category=event_data.productCategory,
@@ -264,6 +425,15 @@ async def create_closing_event(
     )
     db.add(event)
     await db.flush()
+
+    if lead is not None:
+        await apply_status_transition(
+            db,
+            lead,
+            LeadStatus.CLOSED_WON,
+            changed_by_user_id=current_user.id,
+            reason="closing_documented",
+        )
 
     # Log audit
     await log_audit(
@@ -280,7 +450,8 @@ async def create_closing_event(
         datetime=event.datetime,
         units=float(event.units),
         productCategory=event.product_category,
-        notes=event.notes
+        notes=event.notes,
+        leadId=event.lead_id,
     )
 
 

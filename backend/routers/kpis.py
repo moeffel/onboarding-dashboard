@@ -10,6 +10,7 @@ from database import get_db
 from models import User, Team, UserRole
 from routers.auth import get_current_user, require_roles
 from services.kpi_calculator import calculate_user_kpis, calculate_team_kpis
+from services.lead_kpis import calculate_funnel_kpis
 
 router = APIRouter(prefix="/kpis", tags=["kpis"])
 
@@ -41,6 +42,14 @@ class TeamKPIsResponse(BaseModel):
     teamName: str
     aggregated: KPIsResponse
     members: list[MemberKPIsResponse]
+
+
+class FunnelKPIsResponse(BaseModel):
+    leadsCreated: int
+    statusCounts: dict[str, int]
+    conversions: dict[str, float]
+    dropOffs: dict[str, float]
+    timeMetrics: dict[str, float]
 
 
 @router.get("/me", response_model=KPIsResponse)
@@ -129,3 +138,23 @@ async def get_user_kpis(
 
     kpis = await calculate_user_kpis(db, user_id, period)
     return KPIsResponse(**kpis)
+
+
+@router.get("/journey", response_model=FunnelKPIsResponse)
+async def get_journey_kpis(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user = Depends(get_current_user),
+    period: Literal["today", "week", "month"] = Query("week", description="Time period for KPIs"),
+):
+    if current_user.role == UserRole.STARTER:
+        kpis = await calculate_funnel_kpis(db, user_id=current_user.id, period=period)
+    elif current_user.role == UserRole.TEAMLEITER:
+        if current_user.team_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Kein Team gefunden",
+            )
+        kpis = await calculate_funnel_kpis(db, team_id=current_user.team_id, period=period)
+    else:
+        kpis = await calculate_funnel_kpis(db, period=period)
+    return FunnelKPIsResponse(**kpis)

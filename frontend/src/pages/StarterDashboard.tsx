@@ -61,6 +61,7 @@ export default function StarterDashboard() {
     },
   })
 
+
   const thresholdMap = useMemo(() => {
     const map: Record<string, KPIConfigItem> = {}
     kpiConfig?.forEach((cfg) => {
@@ -90,6 +91,7 @@ export default function StarterDashboard() {
     },
     meta: { requiresAdmin: true },
   })
+
 
   const periodOptions = [
     { value: 'today', label: 'Heute' },
@@ -288,6 +290,7 @@ export default function StarterDashboard() {
           </div>
         </div>
       ) : null}
+
 
       {/* Quick Actions */}
       {canLogActivity && (

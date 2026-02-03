@@ -9,7 +9,17 @@ from alembic import context
 
 # Import the Base and all models to register them
 from database import Base
-from models import User, Team, AuditLog, CallEvent, AppointmentEvent, ClosingEvent
+from models import (
+    User,
+    Team,
+    AuditLog,
+    CallEvent,
+    AppointmentEvent,
+    ClosingEvent,
+    Lead,
+    LeadStatusHistory,
+    LeadEventMapping,
+)
 from config import get_settings
 
 # Alembic Config object

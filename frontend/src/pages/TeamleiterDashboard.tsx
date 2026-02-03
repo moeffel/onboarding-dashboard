@@ -37,11 +37,13 @@ export default function TeamleiterDashboard() {
     queryFn: () => fetchTeamKPIs(period),
   })
 
+
   const periodOptions = [
     { value: 'today', label: 'Heute' },
     { value: 'week', label: 'Diese Woche' },
     { value: 'month', label: 'Dieser Monat' },
   ]
+
 
   // Coaching hints based on KPIs
   const getCoachingHints = (kpis: KPIs) => {

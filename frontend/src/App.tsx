@@ -5,6 +5,7 @@ import Register from './pages/Register'
 import StarterDashboard from './pages/StarterDashboard'
 import TeamleiterDashboard from './pages/TeamleiterDashboard'
 import AdminConsole from './pages/AdminConsole'
+import Customers from './pages/Customers'
 import Layout from './components/Layout'
 
 function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode; allowedRoles?: string[] }) {
@@ -27,6 +28,14 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode;
   }
 
   return <>{children}</>
+}
+
+function DashboardEntry() {
+  const { user } = useAuth()
+  if (user?.role === 'teamleiter') {
+    return <TeamleiterDashboard />
+  }
+  return <StarterDashboard />
 }
 
 function AppRoutes() {
@@ -54,9 +63,20 @@ function AppRoutes() {
       <Route
         path="/dashboard"
         element={
-          <ProtectedRoute allowedRoles={['starter', 'admin']}>
+          <ProtectedRoute allowedRoles={['starter', 'teamleiter', 'admin']}>
             <Layout>
-              <StarterDashboard />
+              <DashboardEntry />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/customers"
+        element={
+          <ProtectedRoute allowedRoles={['starter', 'teamleiter', 'admin']}>
+            <Layout>
+              <Customers />
             </Layout>
           </ProtectedRoute>
         }

@@ -17,7 +17,8 @@ from models import (
     User, Team, UserRole, UserStatus,
     CallEvent, CallOutcome,
     AppointmentEvent, AppointmentType, AppointmentResult,
-    ClosingEvent
+    ClosingEvent,
+    Lead, LeadStatus, LeadStatusHistory
 )
 from services.auth import hash_password
 
@@ -84,6 +85,15 @@ async def create_seed_data():
         teams[0].name = f"Team {teamleiter1.first_name} {teamleiter1.last_name}"
         teams[1].name = f"Team {teamleiter2.first_name} {teamleiter2.last_name}"
 
+        def normalize_email(value: str) -> str:
+            return (
+                value.lower()
+                .replace("ä", "ae")
+                .replace("ö", "oe")
+                .replace("ü", "ue")
+                .replace("ß", "ss")
+            )
+
         # Create starters
         starters = []
         starter_names = [
@@ -92,11 +102,12 @@ async def create_seed_data():
             ("Sarah", "Fischer", teams[0].id),
             ("Jan", "Becker", teams[1].id),
             ("Nina", "Schulz", teams[1].id),
+            ("Alex", "Mueller", teams[1].id),
         ]
 
         for first, last, team_id in starter_names:
             starter = User(
-                email=f"{first.lower()}.{last.lower()}@onboarding.de",
+                email=f"{normalize_email(first)}.{normalize_email(last)}@onboarding.de",
                 password_hash=hash_password("password123"),
                 first_name=first,
                 last_name=last,
@@ -114,6 +125,62 @@ async def create_seed_data():
         appointment_results = list(AppointmentResult)
 
         for starter in starters:
+            # Create sample leads for Kanban
+            statuses = [
+                LeadStatus.NEW_COLD,
+                LeadStatus.CALL_SCHEDULED,
+                LeadStatus.CONTACT_ESTABLISHED,
+                LeadStatus.FIRST_APPT_SCHEDULED,
+                LeadStatus.FIRST_APPT_COMPLETED,
+                LeadStatus.SECOND_APPT_SCHEDULED,
+                LeadStatus.SECOND_APPT_COMPLETED,
+                LeadStatus.CLOSED_WON,
+            ]
+            for idx in range(5):
+                status = random.choice(statuses)
+                lead = Lead(
+                    owner_user_id=starter.id,
+                    team_id=starter.team_id,
+                    full_name=f"Lead {starter.first_name} {idx + 1}",
+                    phone=f"+43{random.randint(1000000, 9999999)}",
+                    email=None,
+                    current_status=status,
+                    tags=["seed"],
+                )
+                db.add(lead)
+                await db.flush()
+
+                base_time = datetime.utcnow() - timedelta(days=random.randint(0, 10))
+                db.add(
+                    LeadStatusHistory(
+                        lead_id=lead.id,
+                        changed_by_user_id=starter.id,
+                        from_status=LeadStatus.NEW_COLD,
+                        to_status=LeadStatus.NEW_COLD,
+                        changed_at=base_time,
+                        reason="seed",
+                    )
+                )
+                if status != LeadStatus.NEW_COLD:
+                    meta = None
+                    if status in {
+                        LeadStatus.CALL_SCHEDULED,
+                        LeadStatus.FIRST_APPT_SCHEDULED,
+                        LeadStatus.SECOND_APPT_SCHEDULED,
+                    }:
+                        meta = {"scheduled_for": (base_time + timedelta(days=1)).isoformat()}
+                    db.add(
+                        LeadStatusHistory(
+                            lead_id=lead.id,
+                            changed_by_user_id=starter.id,
+                            from_status=LeadStatus.NEW_COLD,
+                            to_status=status,
+                            changed_at=base_time + timedelta(hours=2),
+                            reason="seed",
+                            meta=meta,
+                        )
+                    )
+
             # Generate events for the last 30 days
             for days_ago in range(30):
                 event_date = datetime.utcnow() - timedelta(days=days_ago)
@@ -181,7 +248,8 @@ async def create_seed_data():
         print("\nTest accounts:")
         print("  Admin:      admin@onboarding.de / admin123")
         print("  Teamleiter: max.mustermann@onboarding.de / password123")
-        print("  Starter:    lisa.müller@onboarding.de / password123")
+        print("  Starter:    lisa.mueller@onboarding.de / password123")
+        print("  Starter:    alex.mueller@onboarding.de / password123")
 
 
 if __name__ == "__main__":

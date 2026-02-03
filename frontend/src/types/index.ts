@@ -35,8 +35,9 @@ export interface CallEvent {
   userId: number
   datetime: string
   contactRef: string | null
-  outcome: 'answered' | 'no_answer' | 'busy' | 'voicemail' | 'wrong_number'
+  outcome: 'answered' | 'no_answer' | 'declined' | 'busy' | 'voicemail' | 'wrong_number'
   notes: string | null
+  leadId?: number | null
 }
 
 export interface AppointmentEvent {
@@ -46,6 +47,7 @@ export interface AppointmentEvent {
   datetime: string
   result: 'set' | 'cancelled' | 'no_show' | 'completed'
   notes: string | null
+  leadId?: number | null
 }
 
 export interface ClosingEvent {
@@ -55,6 +57,7 @@ export interface ClosingEvent {
   units: number
   productCategory: string | null
   notes: string | null
+  leadId?: number | null
 }
 
 export interface KPIs {
@@ -68,6 +71,50 @@ export interface KPIs {
   closings: number
   unitsTotal: number
   avgUnitsPerClosing: number
+}
+
+export type LeadStatus =
+  | 'new_cold'
+  | 'call_scheduled'
+  | 'contact_established'
+  | 'first_appt_pending'
+  | 'first_appt_scheduled'
+  | 'first_appt_completed'
+  | 'second_appt_scheduled'
+  | 'second_appt_completed'
+  | 'closed_won'
+  | 'closed_lost'
+
+export interface Lead {
+  id: number
+  ownerUserId: number
+  teamId: number
+  fullName: string
+  phone: string
+  email?: string | null
+  currentStatus: LeadStatus
+  statusUpdatedAt: string
+  lastActivityAt?: string | null
+  tags: string[]
+  note?: string | null
+  createdAt: string
+}
+
+export interface CalendarEntry {
+  leadId: number
+  title: string
+  scheduledFor: string
+  status: LeadStatus
+  ownerUserId: number
+  teamId: number
+}
+
+export interface FunnelKPIs {
+  leadsCreated: number
+  statusCounts: Record<string, number>
+  conversions: Record<string, number>
+  dropOffs: Record<string, number>
+  timeMetrics: Record<string, number>
 }
 
 export type TimePeriod = 'today' | 'week' | 'month'

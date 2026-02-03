@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import Button from './ui/Button'
 import Input from './ui/Input'
 import Select from './ui/Select'
+import { Lead } from '../types'
 
 type ActivityType = 'call' | 'appointment' | 'closing'
 
@@ -15,6 +16,7 @@ interface ActivityModalProps {
 const callOutcomeOptions = [
   { value: 'answered', label: 'Angenommen' },
   { value: 'no_answer', label: 'Keine Antwort' },
+  { value: 'declined', label: 'Termin abgelehnt' },
   { value: 'busy', label: 'Besetzt' },
   { value: 'voicemail', label: 'Mailbox' },
   { value: 'wrong_number', label: 'Falsche Nummer' },
@@ -41,17 +43,21 @@ function ActivityModal({
   const [activityType, setActivityType] = useState<ActivityType>(initialType)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [leads, setLeads] = useState<Lead[]>([])
+  const [selectedLeadId, setSelectedLeadId] = useState<string>('')
 
   const [callData, setCallData] = useState({
     contactRef: '',
     outcome: 'answered',
     notes: '',
+    nextCallAt: '',
   })
 
   const [appointmentData, setAppointmentData] = useState({
     type: 'first',
     result: 'set',
     notes: '',
+    datetime: '',
   })
 
   const [closingData, setClosingData] = useState({
@@ -60,10 +66,20 @@ function ActivityModal({
     notes: '',
   })
 
+  const [leadData, setLeadData] = useState({
+    fullName: '',
+    phone: '',
+    email: '',
+  })
+
   useEffect(() => {
     if (isOpen) {
       setActivityType(initialType)
       setError(null)
+      fetch('/api/leads', { credentials: 'include' })
+        .then((res) => (res.ok ? res.json() : Promise.reject()))
+        .then((data: Lead[]) => setLeads(data))
+        .catch(() => setLeads([]))
     }
   }, [initialType, isOpen])
 
@@ -86,6 +102,29 @@ function ActivityModal({
     setError(null)
 
     try {
+      let leadId = selectedLeadId ? Number(selectedLeadId) : null
+      if (!leadId) {
+        if (!leadData.fullName.trim() || !leadData.phone.trim()) {
+          throw new Error('Name und Telefonnummer sind Pflichtfelder')
+        }
+        const leadResponse = await fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            fullName: leadData.fullName.trim(),
+            phone: leadData.phone.trim(),
+            email: leadData.email.trim() || undefined,
+          }),
+        })
+        if (!leadResponse.ok) {
+          const detail = await leadResponse.json().catch(() => null)
+          throw new Error(detail?.detail || 'Lead konnte nicht angelegt werden')
+        }
+        const createdLead = (await leadResponse.json()) as Lead
+        leadId = createdLead.id
+      }
+
       let endpoint = ''
       let payload: Record<string, unknown> = {}
 
@@ -95,13 +134,24 @@ function ActivityModal({
           contactRef: callData.contactRef || undefined,
           outcome: callData.outcome,
           notes: callData.notes || undefined,
+          leadId,
+          nextCallAt: callData.nextCallAt
+            ? new Date(callData.nextCallAt).toISOString()
+            : undefined,
         }
       } else if (activityType === 'appointment') {
+        if (appointmentData.result === 'set' && !appointmentData.datetime) {
+          throw new Error('Datum ist für vereinbarte Termine erforderlich')
+        }
         endpoint = 'appointment'
         payload = {
           type: appointmentData.type,
           result: appointmentData.result,
           notes: appointmentData.notes || undefined,
+          datetime: appointmentData.datetime
+            ? new Date(appointmentData.datetime).toISOString()
+            : undefined,
+          leadId,
         }
       } else {
         endpoint = 'closing'
@@ -109,6 +159,7 @@ function ActivityModal({
           units: closingData.units ? Number(closingData.units) : 0,
           productCategory: closingData.productCategory || undefined,
           notes: closingData.notes || undefined,
+          leadId,
         }
       }
 
@@ -120,15 +171,26 @@ function ActivityModal({
       })
 
       if (!response.ok) {
-        const detail = await response.json().catch(() => null)
-        throw new Error(detail?.detail || 'Speichern fehlgeschlagen')
+        const payload = await response.json().catch(() => null)
+        const detail = payload?.detail ?? payload
+        const message =
+          typeof detail === 'string'
+            ? detail
+            : Array.isArray(detail)
+              ? detail.map((item) => item?.msg || JSON.stringify(item)).join(', ')
+              : detail
+                ? JSON.stringify(detail)
+                : 'Speichern fehlgeschlagen'
+        throw new Error(message)
       }
 
       onSuccess()
       onClose()
-      setCallData({ contactRef: '', outcome: 'answered', notes: '' })
-      setAppointmentData({ type: 'first', result: 'set', notes: '' })
+      setCallData({ contactRef: '', outcome: 'answered', notes: '', nextCallAt: '' })
+      setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '' })
       setClosingData({ units: '', productCategory: '', notes: '' })
+      setLeadData({ fullName: '', phone: '', email: '' })
+      setSelectedLeadId('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler')
     } finally {
@@ -179,6 +241,42 @@ function ActivityModal({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Lead</p>
+            <Select
+              label="Bestehenden Lead wählen"
+              value={selectedLeadId}
+              onChange={(e) => setSelectedLeadId(e.target.value)}
+              options={[
+                { value: '', label: 'Neuen Lead anlegen' },
+                ...leads.map((lead) => ({
+                  value: String(lead.id),
+                  label: `${lead.fullName} • ${lead.phone}`,
+                })),
+              ]}
+            />
+            {!selectedLeadId && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Input
+                  label="Name (Pflicht)"
+                  value={leadData.fullName}
+                  onChange={(e) => setLeadData({ ...leadData, fullName: e.target.value })}
+                  required
+                />
+                <Input
+                  label="Telefonnummer (Pflicht)"
+                  value={leadData.phone}
+                  onChange={(e) => setLeadData({ ...leadData, phone: e.target.value })}
+                  required
+                />
+                <Input
+                  label="E-Mail (optional)"
+                  value={leadData.email}
+                  onChange={(e) => setLeadData({ ...leadData, email: e.target.value })}
+                />
+              </div>
+            )}
+          </div>
           {activityType === 'call' && (
             <>
               <Input
@@ -193,6 +291,16 @@ function ActivityModal({
                 onChange={(e) => setCallData({ ...callData, outcome: e.target.value })}
                 options={callOutcomeOptions}
               />
+              {(callData.outcome === 'no_answer' ||
+                callData.outcome === 'busy' ||
+                callData.outcome === 'voicemail') && (
+                <Input
+                  label="Erneuter Anruf (Datum/Uhrzeit)"
+                  type="datetime-local"
+                  value={callData.nextCallAt}
+                  onChange={(e) => setCallData({ ...callData, nextCallAt: e.target.value })}
+                />
+              )}
               <div className="space-y-1">
                 <label className="block text-sm font-medium text-slate-700">
                   Notizen (optional)
@@ -221,6 +329,13 @@ function ActivityModal({
                 value={appointmentData.result}
                 onChange={(e) => setAppointmentData({ ...appointmentData, result: e.target.value })}
                 options={appointmentResultOptions}
+              />
+              <Input
+                label="Termin Datum/Uhrzeit"
+                type="datetime-local"
+                value={appointmentData.datetime}
+                onChange={(e) => setAppointmentData({ ...appointmentData, datetime: e.target.value })}
+                required={appointmentData.result === 'set'}
               />
               <div className="space-y-1">
                 <label className="block text-sm font-medium text-slate-700">
