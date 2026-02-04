@@ -105,7 +105,7 @@ export default function Register() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          <BarChart3 className="h-10 w-10 text-red-600" />
+          <BarChart3 className="h-10 w-10 text-sl-red" />
           <span className="text-2xl font-bold text-slate-900">Onboarding Dashboard</span>
         </div>
 
@@ -116,7 +116,7 @@ export default function Register() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                <div className="p-3 bg-sl-red/10 border border-sl-red/30 rounded-lg text-sm text-sl-red">
                   {error}
                 </div>
               )}
@@ -192,11 +192,11 @@ export default function Register() {
                     type="checkbox"
                     checked={privacyConsent}
                     onChange={(e) => setPrivacyConsent(e.target.checked)}
-                    className="mt-1 h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-sl-red focus:ring-sl-red"
                   />
                   <span className="text-sm text-slate-600">
                     Ich habe die{' '}
-                    <a href="/datenschutz" target="_blank" className="text-red-600 hover:underline">
+                    <a href="/datenschutz" target="_blank" className="text-sl-red hover:underline">
                       Datenschutzerklärung
                     </a>{' '}
                     gelesen und akzeptiere diese. *
@@ -208,11 +208,11 @@ export default function Register() {
                     type="checkbox"
                     checked={termsAccepted}
                     onChange={(e) => setTermsAccepted(e.target.checked)}
-                    className="mt-1 h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-sl-red focus:ring-sl-red"
                   />
                   <span className="text-sm text-slate-600">
                     Ich akzeptiere die{' '}
-                    <a href="/nutzungsbedingungen" target="_blank" className="text-red-600 hover:underline">
+                    <a href="/nutzungsbedingungen" target="_blank" className="text-sl-red hover:underline">
                       Nutzungsbedingungen
                     </a>
                     . *
@@ -227,7 +227,7 @@ export default function Register() {
 
             <p className="mt-4 text-center text-sm text-slate-500">
               Bereits registriert?{' '}
-              <Link to="/login" className="text-red-600 hover:text-red-700 font-medium">
+              <Link to="/login" className="text-sl-red hover:text-sl-red font-medium">
                 Jetzt anmelden
               </Link>
             </p>

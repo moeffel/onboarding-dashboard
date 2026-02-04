@@ -27,13 +27,13 @@ export default function KPICard({
   }
 
   const TrendIcon = trend && trend > 0 ? TrendingUp : trend && trend < 0 ? TrendingDown : Minus
-  const trendColor = trend && trend > 0 ? 'text-green-600' : trend && trend < 0 ? 'text-red-600' : 'text-slate-500'
+  const trendColor = trend && trend > 0 ? 'text-green-600' : trend && trend < 0 ? 'text-sl-red' : 'text-slate-500'
   const variantLabel =
     variant === 'success' ? 'Gut' : variant === 'warning' ? 'Warnung' : variant === 'danger' ? 'Kritisch' : null
   const variantBadgeStyles: Record<'success' | 'warning' | 'danger', string> = {
     success: 'bg-green-100 text-green-700',
     warning: 'bg-yellow-100 text-yellow-700',
-    danger: 'bg-red-100 text-red-700',
+    danger: 'bg-sl-red/10 text-sl-red',
   }
 
   return (

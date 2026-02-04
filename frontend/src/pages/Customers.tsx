@@ -26,9 +26,9 @@ const statusLabels: Record<string, string> = {
 const statusPillStyles: Record<string, string> = {
   new_cold: 'bg-slate-100 text-slate-700',
   call_scheduled: 'bg-amber-100 text-amber-700',
-  contact_established: 'bg-red-100 text-red-700',
-  first_appt_pending: 'bg-red-100 text-red-700',
-  first_appt_scheduled: 'bg-red-100 text-red-700',
+  contact_established: 'bg-sl-red/10 text-sl-red',
+  first_appt_pending: 'bg-sl-red/10 text-sl-red',
+  first_appt_scheduled: 'bg-sl-red/10 text-sl-red',
   first_appt_completed: 'bg-emerald-100 text-emerald-700',
   second_appt_scheduled: 'bg-emerald-100 text-emerald-700',
   second_appt_completed: 'bg-emerald-100 text-emerald-700',
@@ -359,7 +359,7 @@ export default function Customers() {
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+      <div className="p-4 bg-sl-red/10 border border-sl-red/30 rounded-lg text-sl-red">
         Fehler beim Laden der Kunden: {error.message}
       </div>
     )
@@ -439,7 +439,7 @@ export default function Customers() {
                         }}
                         className={`px-4 py-3 transition-colors ${
                           isActive
-                            ? 'bg-red-50 ring-1 ring-inset ring-red-200'
+                            ? 'bg-sl-red/10 ring-1 ring-inset ring-sl-red/30'
                             : 'hover:bg-slate-50'
                         }`}
                       >
@@ -539,7 +539,7 @@ export default function Customers() {
                             onClick={() => setSelectedId(lead.id)}
                             className={`border-b border-slate-100 cursor-pointer transition-colors ${
                               isActive
-                                ? 'bg-red-50 ring-1 ring-inset ring-red-200'
+                                ? 'bg-sl-red/10 ring-1 ring-inset ring-sl-red/30'
                                 : 'hover:bg-slate-50'
                             }`}
                           >
@@ -736,7 +736,7 @@ export default function Customers() {
                         <button
                           type="button"
                           onClick={() => toggleNote(selectedLead.id)}
-                          className="mt-2 text-xs font-medium text-red-600 hover:text-red-700"
+                          className="mt-2 text-xs font-medium text-sl-red hover:text-sl-red"
                         >
                           {expandedNotes[selectedLead.id] ? 'Weniger anzeigen' : 'Mehr anzeigen'}
                         </button>
@@ -747,7 +747,7 @@ export default function Customers() {
                   )}
                   <div className="mt-3 space-y-2">
                     {noteError && (
-                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                      <div className="rounded-lg border border-sl-red/30 bg-sl-red/10 px-3 py-2 text-xs text-sl-red">
                         {noteError}
                       </div>
                     )}
@@ -763,7 +763,7 @@ export default function Customers() {
                         if (noteError) setNoteError(null)
                       }}
                       maxLength={1000}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sl-red"
                       rows={4}
                       placeholder="Notiz ergänzen oder aktualisieren"
                     />
@@ -773,7 +773,7 @@ export default function Customers() {
                     <button
                       type="button"
                       onClick={() => updateNoteMutation.mutate()}
-                      className="w-full rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+                      className="w-full rounded-lg bg-sl-red px-3 py-2 text-sm font-medium text-white hover:bg-sl-red/90 disabled:opacity-60"
                       disabled={updateNoteMutation.isPending || noteDraft.length > 1000}
                     >
                       {updateNoteMutation.isPending ? 'Speichern...' : 'Notiz speichern'}

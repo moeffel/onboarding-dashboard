@@ -50,7 +50,7 @@ function AdminNav() {
             cn(
               'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors relative shrink-0',
               isActive
-                ? 'bg-red-100 text-red-700'
+                ? 'bg-sl-red/10 text-sl-red'
                 : 'text-slate-600 hover:bg-slate-100'
             )
           }
@@ -58,7 +58,7 @@ function AdminNav() {
           <item.icon className="h-4 w-4" />
           {item.label}
           {item.badge && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 bg-sl-red text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
               {item.badge}
             </span>
           )}
@@ -359,7 +359,7 @@ function UsersManagement() {
                         placeholder="Ablehnungsgrund eingeben..."
                         value={rejectReason[user.id] || ''}
                         onChange={(e) => setRejectReason({ ...rejectReason, [user.id]: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sl-red focus:border-sl-red"
                         rows={2}
                       />
                       <div className="flex gap-2">
@@ -400,7 +400,7 @@ function UsersManagement() {
                             type="date"
                             value={approvalStartDate[user.id] || ''}
                             onChange={(e) => setApprovalStartDate({ ...approvalStartDate, [user.id]: e.target.value })}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sl-red focus:border-sl-red"
                           />
                         </div>
                         <div>
@@ -410,7 +410,7 @@ function UsersManagement() {
                             placeholder="Optional..."
                             value={approvalNotes[user.id] || ''}
                             onChange={(e) => setApprovalNotes({ ...approvalNotes, [user.id]: e.target.value })}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sl-red focus:border-sl-red"
                           />
                         </div>
                       </div>

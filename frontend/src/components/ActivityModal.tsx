@@ -679,7 +679,7 @@ function ActivityModal({
         </div>
 
         {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="mb-4 rounded-lg border border-sl-red/30 bg-sl-red/10 px-3 py-2 text-sm text-sl-red">
             {error}
           </div>
         )}
@@ -742,7 +742,7 @@ function ActivityModal({
                     type="checkbox"
                     checked={callData.leadOnly}
                     onChange={(e) => setCallData({ ...callData, leadOnly: e.target.checked })}
-                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                    className="h-4 w-4 rounded border-slate-300 text-sl-red focus:ring-sl-red"
                   />
                   <label htmlFor="lead-only">Nur Lead anlegen (ohne Anruf)</label>
                 </div>
@@ -763,12 +763,12 @@ function ActivityModal({
 
               {/* Show appointment field when "Termin angenommen" */}
               {needsAppointment && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">
-                  <p className="text-sm font-medium text-red-700">
+                <div className="rounded-lg border border-sl-red/30 bg-sl-red/10 p-4 space-y-3">
+                  <p className="text-sm font-medium text-sl-red">
                     {callData.appointmentType === 'second' ? 'Zweittermin vereinbaren' : 'Ersttermin vereinbaren'}
                   </p>
                   {scheduledEntry && (
-                    <div className="rounded-md border border-red-200 bg-white px-3 py-2 text-xs text-red-700 space-y-1">
+                    <div className="rounded-md border border-sl-red/30 bg-white px-3 py-2 text-xs text-sl-red space-y-1">
                       <p className="font-semibold">Bereits terminiert</p>
                       <p>{formatShortDateTime(scheduledEntry.scheduledFor)}</p>
                       {scheduledEntry.location && <p>Ort: {scheduledEntry.location}</p>}
@@ -861,7 +861,7 @@ function ActivityModal({
                 <textarea
                   value={callData.notes}
                   onChange={(e) => setCallData({ ...callData, notes: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sl-red"
                   rows={3}
                   placeholder="Besondere Hinweise zum Gespräch"
                 />
@@ -942,7 +942,7 @@ function ActivityModal({
                 <textarea
                   value={appointmentData.notes}
                   onChange={(e) => setAppointmentData({ ...appointmentData, notes: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sl-red"
                   rows={3}
                   placeholder="Was wurde vereinbart?"
                 />
@@ -991,7 +991,7 @@ function ActivityModal({
                 <textarea
                   value={closingData.notes}
                   onChange={(e) => setClosingData({ ...closingData, notes: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sl-red"
                   rows={3}
                   placeholder="Details zum Abschluss"
                 />

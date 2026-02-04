@@ -189,11 +189,11 @@ export default function StarterDashboard() {
   const getEventIcon = (type: RecentEvent['type']) => {
     switch (type) {
       case 'appointment':
-        return <Calendar className="h-4 w-4 text-red-600" />
+        return <Calendar className="h-4 w-4 text-sl-red" />
       case 'closing':
         return <Target className="h-4 w-4 text-emerald-500" />
       default:
-        return <Phone className="h-4 w-4 text-red-600" />
+        return <Phone className="h-4 w-4 text-sl-red" />
     }
   }
 
@@ -206,7 +206,7 @@ export default function StarterDashboard() {
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+      <div className="p-4 bg-sl-red/10 border border-sl-red/30 rounded-lg text-sl-red">
         Fehler beim Laden der KPIs: {error.message}
       </div>
     )
@@ -253,7 +253,7 @@ export default function StarterDashboard() {
         </div>
       )}
       {errorMessage && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+        <div className="rounded-lg border border-sl-red/30 bg-sl-red/10 px-4 py-2 text-sm text-sl-red">
           {errorMessage}
         </div>
       )}
@@ -277,7 +277,7 @@ export default function StarterDashboard() {
                 type="button"
                 onClick={() => openModal('call')}
               >
-                <Phone className="h-5 w-5 mr-3 text-red-600" />
+                <Phone className="h-5 w-5 mr-3 text-sl-red" />
                 <div className="text-left">
                   <p className="font-medium">Anruf erfassen</p>
                   <p className="text-xs text-slate-500">Telefonate dokumentieren</p>
@@ -289,7 +289,7 @@ export default function StarterDashboard() {
                 type="button"
                 onClick={() => openModal('appointment')}
               >
-                <Calendar className="h-5 w-5 mr-3 text-red-600" />
+                <Calendar className="h-5 w-5 mr-3 text-sl-red" />
                 <div className="text-left">
                   <p className="font-medium">Termin erfassen</p>
                   <p className="text-xs text-slate-500">Erst- oder Zweittermin</p>
@@ -301,7 +301,7 @@ export default function StarterDashboard() {
                 type="button"
                 onClick={() => openModal('closing')}
               >
-                <Target className="h-5 w-5 mr-3 text-red-600" />
+                <Target className="h-5 w-5 mr-3 text-sl-red" />
                 <div className="text-left">
                   <p className="font-medium">Abschluss erfassen</p>
                   <p className="text-xs text-slate-500">Verkauf dokumentieren</p>

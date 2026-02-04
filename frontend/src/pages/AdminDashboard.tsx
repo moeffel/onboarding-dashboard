@@ -92,9 +92,9 @@ const statusLabels: Record<string, string> = {
 const statusPillStyles: Record<string, string> = {
   new_cold: 'bg-slate-100 text-slate-700',
   call_scheduled: 'bg-amber-100 text-amber-700',
-  contact_established: 'bg-red-100 text-red-700',
-  first_appt_pending: 'bg-red-100 text-red-700',
-  first_appt_scheduled: 'bg-red-100 text-red-700',
+  contact_established: 'bg-sl-red/10 text-sl-red',
+  first_appt_pending: 'bg-sl-red/10 text-sl-red',
+  first_appt_scheduled: 'bg-sl-red/10 text-sl-red',
   first_appt_completed: 'bg-emerald-100 text-emerald-700',
   second_appt_scheduled: 'bg-emerald-100 text-emerald-700',
   second_appt_completed: 'bg-emerald-100 text-emerald-700',
@@ -359,11 +359,11 @@ export default function AdminDashboard() {
                   <button
                     key={team.id}
                     onClick={() => setSelectedTeamId(team.id)}
-                    className="w-full flex items-center justify-between p-4 rounded-lg border border-slate-200 hover:border-red-300 hover:bg-red-50 transition-colors text-left"
+                    className="w-full flex items-center justify-between p-4 rounded-lg border border-slate-200 hover:border-sl-red/30 hover:bg-sl-red/10 transition-colors text-left"
                   >
                     <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
-                        <Users className="h-6 w-6 text-red-600" />
+                      <div className="h-12 w-12 rounded-full bg-sl-red/10 flex items-center justify-center">
+                        <Users className="h-6 w-6 text-sl-red" />
                       </div>
                       <div>
                         <p className="font-semibold text-slate-900">{team.displayName}</p>
@@ -510,7 +510,7 @@ export default function AdminDashboard() {
                   <button
                     key={member.userId}
                     onClick={() => setSelectedStarterId(member.userId)}
-                    className="w-full flex items-center justify-between p-4 rounded-lg border border-slate-200 hover:border-red-300 hover:bg-red-50 transition-colors text-left"
+                    className="w-full flex items-center justify-between p-4 rounded-lg border border-slate-200 hover:border-sl-red/30 hover:bg-sl-red/10 transition-colors text-left"
                   >
                     <div className="flex items-center gap-4">
                       <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center">

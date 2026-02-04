@@ -149,7 +149,7 @@ export default function JourneyKPIsPanel({ data, title = 'Journey-KPIs' }: Journ
                       </div>
                       <div className="mt-2 h-1.5 rounded-full bg-slate-200">
                         <div
-                          className="h-1.5 rounded-full bg-red-600"
+                          className="h-1.5 rounded-full bg-sl-red"
                           style={{ width: `${width}%` }}
                         />
                       </div>

@@ -20,16 +20,16 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           id={id}
           className={cn(
             'block w-full px-3 py-2.5 border rounded-md shadow-sm transition-colors bg-white text-slate-900 placeholder-slate-400',
-            'focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500',
+            'focus:outline-none focus:ring-2 focus:ring-sl-red focus:border-sl-red',
             error
-              ? 'border-red-300 text-red-900 placeholder-red-300'
+              ? 'border-sl-red/40 text-sl-red placeholder-sl-red/40'
               : 'border-slate-300/80',
             className
           )}
           {...props}
         />
         {error && (
-          <p className="text-sm text-red-600">{error}</p>
+          <p className="text-sm text-sl-red">{error}</p>
         )}
       </div>
     )

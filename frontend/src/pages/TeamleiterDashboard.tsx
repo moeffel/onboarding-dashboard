@@ -53,9 +53,9 @@ const statusLabels: Record<string, string> = {
 const statusPillStyles: Record<string, string> = {
   new_cold: 'bg-slate-100 text-slate-700',
   call_scheduled: 'bg-amber-100 text-amber-700',
-  contact_established: 'bg-red-100 text-red-700',
-  first_appt_pending: 'bg-red-100 text-red-700',
-  first_appt_scheduled: 'bg-red-100 text-red-700',
+  contact_established: 'bg-sl-red/10 text-sl-red',
+  first_appt_pending: 'bg-sl-red/10 text-sl-red',
+  first_appt_scheduled: 'bg-sl-red/10 text-sl-red',
   first_appt_completed: 'bg-emerald-100 text-emerald-700',
   second_appt_scheduled: 'bg-emerald-100 text-emerald-700',
   second_appt_completed: 'bg-emerald-100 text-emerald-700',
@@ -328,7 +328,7 @@ export default function TeamleiterDashboard() {
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+      <div className="p-4 bg-sl-red/10 border border-sl-red/30 rounded-lg text-sl-red">
         Fehler beim Laden der Team-KPIs: {error.message}
       </div>
     )
@@ -478,7 +478,7 @@ export default function TeamleiterDashboard() {
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-red-600" />
+                <Calendar className="h-5 w-5 text-sl-red" />
                 <CardTitle>Nächste Termine</CardTitle>
               </div>
             </CardHeader>

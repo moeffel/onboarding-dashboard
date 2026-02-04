@@ -7,6 +7,12 @@ export default {
   theme: {
     extend: {
       colors: {
+        sl: {
+          red: '#D31E2D',
+          dark: '#2D2D2D',
+          gray: '#F5F5F5',
+          light: '#FFFFFF',
+        },
         primary: {
           50: '#fff5f5',
           100: '#ffe3e3',
