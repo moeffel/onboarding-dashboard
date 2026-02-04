@@ -1,7 +1,7 @@
 export type AppointmentMode = 'phone' | 'online' | 'in_person'
 
 export const buildAppointmentLocation = (mode: AppointmentMode, detail: string) => {
-  if (mode === 'phone') return 'Telefonisch'
+  if (mode === 'phone') return 'Online'
   if (mode === 'online') return 'Online'
   if (mode === 'in_person') {
     const trimmed = detail.trim()
@@ -12,10 +12,10 @@ export const buildAppointmentLocation = (mode: AppointmentMode, detail: string) 
 
 export const parseAppointmentLocation = (location?: string | null) => {
   if (!location) {
-    return { mode: 'phone' as AppointmentMode, detail: '', label: 'Telefonisch' }
+    return { mode: 'online' as AppointmentMode, detail: '', label: 'Online' }
   }
   if (location.startsWith('Telefonisch')) {
-    return { mode: 'phone' as AppointmentMode, detail: '', label: 'Telefonisch' }
+    return { mode: 'online' as AppointmentMode, detail: '', label: 'Online' }
   }
   if (location.startsWith('Online')) {
     return { mode: 'online' as AppointmentMode, detail: '', label: 'Online' }

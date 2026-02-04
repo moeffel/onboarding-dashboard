@@ -1,14 +1,32 @@
 """Admin router for user and team management."""
+import csv
+import io
+import json
 from datetime import datetime, timezone, date
+from decimal import Decimal
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import User, Team, UserRole, UserStatus, AuditLog, AuditAction
+from models import (
+    AppointmentEvent,
+    AuditAction,
+    AuditLog,
+    CallEvent,
+    ClosingEvent,
+    KPIConfig,
+    Lead,
+    LeadEventMapping,
+    LeadStatusHistory,
+    Team,
+    User,
+    UserRole,
+    UserStatus,
+)
 from routers.auth import require_roles
 from services.auth import hash_password, log_audit
 
@@ -130,6 +148,76 @@ class AuditLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+def _serialize_csv_value(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=True)
+    if hasattr(value, "value"):
+        return str(value.value)
+    return str(value)
+
+
+@router.get("/export.csv")
+async def export_csv(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user = Depends(require_roles(UserRole.ADMIN)),
+):
+    """Export all database entries as a single CSV file."""
+    export_models = [
+        ("users", User),
+        ("teams", Team),
+        ("leads", Lead),
+        ("lead_status_history", LeadStatusHistory),
+        ("call_events", CallEvent),
+        ("appointment_events", AppointmentEvent),
+        ("closing_events", ClosingEvent),
+        ("lead_event_mappings", LeadEventMapping),
+        ("kpi_configs", KPIConfig),
+        ("audit_logs", AuditLog),
+    ]
+
+    column_names: list[str] = ["table"]
+    for _, model in export_models:
+        for column in model.__table__.columns:
+            if column.name not in column_names:
+                column_names.append(column.name)
+
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=column_names)
+    writer.writeheader()
+
+    for table_name, model in export_models:
+        result = await db.execute(select(model))
+        rows = result.scalars().all()
+        for row in rows:
+            record = {"table": table_name}
+            for column in model.__table__.columns:
+                record[column.name] = _serialize_csv_value(getattr(row, column.name))
+            writer.writerow(record)
+
+    await log_audit(
+        db,
+        action=AuditAction.EXPORT,
+        actor_user_id=current_user.id,
+        object_type="Export",
+        object_id=None,
+        diff={"tables": [name for name, _ in export_models]},
+    )
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    filename = f"onboarding-export-{timestamp}.csv"
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=\"{filename}\""},
+    )
 
 
 # User management
@@ -395,6 +483,23 @@ async def delete_user(
         actor_user_id=current_user.id,
         object_type="User",
         object_id=user.id
+    )
+
+    lead_ids = select(Lead.id).where(Lead.owner_user_id == user.id)
+
+    await db.execute(delete(CallEvent).where(CallEvent.user_id == user.id))
+    await db.execute(delete(CallEvent).where(CallEvent.lead_id.in_(lead_ids)))
+    await db.execute(delete(AppointmentEvent).where(AppointmentEvent.user_id == user.id))
+    await db.execute(delete(AppointmentEvent).where(AppointmentEvent.lead_id.in_(lead_ids)))
+    await db.execute(delete(ClosingEvent).where(ClosingEvent.user_id == user.id))
+    await db.execute(delete(ClosingEvent).where(ClosingEvent.lead_id.in_(lead_ids)))
+    await db.execute(delete(LeadEventMapping).where(LeadEventMapping.lead_id.in_(lead_ids)))
+    await db.execute(delete(LeadStatusHistory).where(LeadStatusHistory.changed_by_user_id == user.id))
+    await db.execute(delete(Lead).where(Lead.owner_user_id == user.id))
+    await db.execute(
+        Team.__table__.update()
+        .where(Team.lead_user_id == user.id)
+        .values(lead_user_id=None)
     )
 
     await db.delete(user)

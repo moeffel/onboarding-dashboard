@@ -39,6 +39,17 @@ def _ensure_not_past(value: datetime | None, label: str) -> None:
         )
 
 
+def _ensure_not_phone_location(location: str | None) -> None:
+    if not location:
+        return
+    normalized = location.strip().lower()
+    if normalized.startswith("telefonisch"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Erst- und Zweittermine dürfen nicht telefonisch stattfinden",
+        )
+
+
 async def get_accessible_lead(
     db: AsyncSession,
     lead_id: int,
@@ -327,8 +338,14 @@ async def create_appointment_event(
         )
     if event_data.result == AppointmentResult.SET:
         _ensure_not_past(event_data.eventDatetime, "Termin-Datum")
+        if not event_data.location:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ort/Format ist für vereinbarte Termine erforderlich",
+            )
+    _ensure_not_phone_location(event_data.location)
 
-    location = event_data.location or "Telefonisch"
+    location = event_data.location or "Online"
 
     event = AppointmentEvent(
         user_id=current_user.id,

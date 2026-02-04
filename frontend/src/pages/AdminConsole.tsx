@@ -1048,11 +1048,38 @@ function AuditLog() {
 }
 
 export default function AdminConsole() {
+  const handleExport = async () => {
+    try {
+      const res = await fetch('/api/admin/export.csv', { credentials: 'include' })
+      if (!res.ok) {
+        throw new Error('CSV-Export fehlgeschlagen')
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      link.download = `onboarding-export-${timestamp}.csv`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error(err)
+      alert('CSV-Export fehlgeschlagen')
+    }
+  }
+
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Administration</h1>
-        <p className="text-slate-500">System- und Benutzerverwaltung</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Administration</h1>
+          <p className="text-slate-500">System- und Benutzerverwaltung</p>
+        </div>
+        <Button variant="secondary" onClick={handleExport}>
+          CSV-Export
+        </Button>
       </div>
 
       <AdminNav />

@@ -28,9 +28,8 @@ const appointmentResultOptions = [
 ]
 
 const appointmentModeOptions = [
-  { value: 'phone', label: 'Telefonisch' },
-  { value: 'in_person', label: 'Persönlich' },
   { value: 'online', label: 'Online' },
+  { value: 'in_person', label: 'Persönlich' },
 ]
 
 const statusLabels: Record<string, string> = {
@@ -125,7 +124,7 @@ function ActivityModal({
     nextCallAt: '',
     appointmentType: 'first',
     appointmentDatetime: '',
-    appointmentMode: 'phone',
+    appointmentMode: 'online',
     appointmentLocation: '',
   })
 
@@ -141,7 +140,7 @@ function ActivityModal({
     result: 'set',
     notes: '',
     datetime: '',
-    mode: 'phone',
+    mode: 'online',
     location: '',
   })
 
@@ -168,10 +167,10 @@ function ActivityModal({
         nextCallAt: '',
         appointmentType: 'first',
         appointmentDatetime: '',
-        appointmentMode: 'phone',
+        appointmentMode: 'online',
         appointmentLocation: '',
       })
-      setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'phone', location: '' })
+      setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'online', location: '' })
       setClosingData({ units: '', productCategory: '', notes: '' })
       setLeadData({ fullName: '', phone: '', email: '' })
       setSelectedLeadId(preSelectedLeadId ? String(preSelectedLeadId) : '')
@@ -527,10 +526,10 @@ function ActivityModal({
       nextCallAt: '',
       appointmentType: 'first',
       appointmentDatetime: '',
-      appointmentMode: 'phone',
+      appointmentMode: 'online',
       appointmentLocation: '',
     })
-    setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'phone', location: '' })
+    setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'online', location: '' })
     setClosingData({ units: '', productCategory: '', notes: '' })
     setLeadData({ fullName: '', phone: '', email: '' })
     setSelectedLeadId('')
