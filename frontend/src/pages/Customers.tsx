@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarEntry, Lead, LeadStatus } from '../types'
-import { parseAppointmentLocation } from '../lib/appointments'
+import { Lead, LeadStatus } from '../types'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
@@ -55,19 +54,6 @@ const statusOptionsArchive = [
 ]
 
 const isClosedStatus = (status: LeadStatus) => status === 'closed_won' || status === 'closed_lost'
-
-const canCreateCall = (status: LeadStatus) => !isClosedStatus(status)
-
-const canCreateAppointment = (status: LeadStatus) =>
-  [
-    'contact_established',
-    'first_appt_pending',
-    'first_appt_scheduled',
-    'first_appt_completed',
-    'second_appt_scheduled',
-  ].includes(status)
-
-const canCreateClosing = (status: LeadStatus) => status === 'second_appt_completed'
 
 // Determine next action based on lead status
 function getNextAction(status: LeadStatus): 'call' | 'appointment' | 'closing' | null {
@@ -131,26 +117,12 @@ async function fetchLeads(): Promise<Lead[]> {
   return response.json()
 }
 
-async function fetchCalendarEntries(): Promise<CalendarEntry[]> {
-  const response = await fetch('/api/leads/calendar?period=month', { credentials: 'include' })
-  if (!response.ok) throw new Error('Kalenderdaten konnten nicht geladen werden')
-  return response.json()
-}
-
 export default function Customers() {
   const { data: leads, isLoading, error } = useQuery({
     queryKey: ['leads', 'customers'],
     queryFn: fetchLeads,
   })
-  const { data: calendarEntries } = useQuery({
-    queryKey: ['leads', 'calendar', 'month'],
-    queryFn: fetchCalendarEntries,
-  })
   const [selectedId, setSelectedId] = useState<number | null>(null)
-  const [expandedNotes, setExpandedNotes] = useState<Record<number, boolean>>({})
-  const [noteDraft, setNoteDraft] = useState('')
-  const [noteError, setNoteError] = useState<string | null>(null)
-  const [noteSaved, setNoteSaved] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [view, setView] = useState<'active' | 'archive'>('active')
   const [statusFilter, setStatusFilter] = useState<'all' | LeadStatus>('all')
@@ -172,35 +144,6 @@ export default function Customers() {
     if (!selectedId) return fallback
     return leads.find((lead) => lead.id === selectedId) || fallback
   }, [leads, selectedId])
-
-  const nextAppointments = useMemo(() => {
-    if (!calendarEntries) return {}
-    const byLead: Record<number, CalendarEntry> = {}
-    const grouped: Record<number, CalendarEntry[]> = {}
-    const now = new Date()
-    calendarEntries
-      .filter((entry) => entry.status === 'first_appt_scheduled' || entry.status === 'second_appt_scheduled')
-      .forEach((entry) => {
-        if (!grouped[entry.leadId]) grouped[entry.leadId] = []
-        grouped[entry.leadId].push(entry)
-      })
-    Object.entries(grouped).forEach(([leadId, entries]) => {
-      entries.sort((a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime())
-      const upcoming = entries.find((entry) => new Date(entry.scheduledFor) >= now)
-      byLead[Number(leadId)] = upcoming || entries[entries.length - 1]
-    })
-    return byLead
-  }, [calendarEntries])
-
-  const selectedAppointment = useMemo(() => {
-    if (!selectedLead) return null
-    return nextAppointments[selectedLead.id] || null
-  }, [nextAppointments, selectedLead])
-
-  const appointmentFormat = useMemo(() => {
-    if (!selectedAppointment) return null
-    return parseAppointmentLocation(selectedAppointment.location)
-  }, [selectedAppointment])
 
   const filteredLeads = useMemo(() => {
     if (!leads) return []
@@ -268,43 +211,6 @@ export default function Customers() {
     }))
   }
 
-  useEffect(() => {
-    setNoteDraft(selectedLead?.note || '')
-    setNoteError(null)
-    setNoteSaved(null)
-  }, [selectedLead?.id, selectedLead?.note])
-
-  const updateNoteMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedLead) return null
-      if (noteDraft.length > 1000) {
-        throw new Error('Notiz darf maximal 1000 Zeichen haben')
-      }
-      const res = await fetch(`/api/leads/${selectedLead.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          note: noteDraft.trim() || null,
-        }),
-      })
-      if (!res.ok) {
-        const detail = await res.json().catch(() => null)
-        throw new Error(detail?.detail || 'Notiz konnte nicht gespeichert werden')
-      }
-      return res.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['leads', 'customers'] })
-      setNoteSaved('Notiz gespeichert')
-      setNoteError(null)
-      setTimeout(() => setNoteSaved(null), 2500)
-    },
-    onError: (err) => {
-      setNoteError(err instanceof Error ? err.message : 'Notiz konnte nicht gespeichert werden')
-    },
-  })
-
   const deleteLeadMutation = useMutation({
     mutationFn: async (leadId: number) => {
       const res = await fetch(`/api/leads/${leadId}`, {
@@ -327,10 +233,6 @@ export default function Customers() {
     },
   })
 
-  const toggleNote = (id: number) => {
-    setExpandedNotes((prev) => ({ ...prev, [id]: !prev[id] }))
-  }
-
   const handleLeadAction = (lead: Lead) => {
     const action = getNextAction(lead.currentStatus)
     if (!action) return
@@ -342,12 +244,6 @@ export default function Customers() {
   const handleDeleteLead = (lead: Lead) => {
     if (!confirm(`Lead "${lead.fullName}" wirklich löschen?`)) return
     deleteLeadMutation.mutate(lead.id)
-  }
-
-  const handleQuickAction = (lead: Lead, type: 'call' | 'appointment' | 'closing') => {
-    setModalLeadId(lead.id)
-    setModalType(type)
-    setModalOpen(true)
   }
 
   const handleActivitySaved = () => {
@@ -398,8 +294,8 @@ export default function Customers() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6">
+        <Card>
           <CardHeader>
             <CardTitle>{view === 'archive' ? 'Archiv' : 'Kundenliste'}</CardTitle>
             <div className="mt-3 flex flex-col gap-3 md:flex-row">
@@ -456,9 +352,12 @@ export default function Customers() {
                             {statusLabels[lead.currentStatus] || lead.currentStatus}
                           </span>
                         </div>
-                        <div className="mt-3 flex items-center justify-between gap-3">
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                           <div className="text-xs text-slate-500">
-                            {nextAction ? 'Nächste Aktion' : 'Status'}
+                            Erstellt: {new Date(lead.createdAt).toLocaleDateString('de-AT')}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            Letzte Aktivität: {lead.lastActivityAt ? new Date(lead.lastActivityAt).toLocaleDateString('de-AT') : '—'}
                           </div>
                           <div className="flex items-center gap-2">
                             {nextAction && (
@@ -481,6 +380,16 @@ export default function Customers() {
                             {!nextAction && lead.currentStatus === 'closed_lost' && (
                               <span className="text-xs text-slate-500">Archiviert</span>
                             )}
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDeleteLead(lead)
+                              }}
+                            >
+                              Löschen
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -488,7 +397,7 @@ export default function Customers() {
                   })}
                 </div>
                 <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full min-w-[720px]">
+                  <table className="w-full min-w-[920px]">
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50/70">
                         <th className="text-left py-3 px-4">
@@ -527,6 +436,9 @@ export default function Customers() {
                             onSort={handleSort}
                           />
                         </th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500">Erstellt am</th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500">Letzte Aktivität</th>
+                        <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500">Löschen</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -579,6 +491,24 @@ export default function Customers() {
                                 <span className="text-xs text-slate-500">Archiviert</span>
                               )}
                             </td>
+                            <td className="py-3 px-4 text-sm text-slate-600">
+                              {new Date(lead.createdAt).toLocaleDateString('de-AT')}
+                            </td>
+                            <td className="py-3 px-4 text-sm text-slate-600">
+                              {lead.lastActivityAt ? new Date(lead.lastActivityAt).toLocaleDateString('de-AT') : '—'}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleDeleteLead(lead)
+                                }}
+                              >
+                                Löschen
+                              </Button>
+                            </td>
                           </tr>
                         )
                       })}
@@ -594,198 +524,6 @@ export default function Customers() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Kundendetails</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {selectedLead ? (
-              <>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Name</p>
-                  <p className="text-sm font-medium text-slate-900">{selectedLead.fullName}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Telefon</p>
-                  <p className="text-sm text-slate-700">{selectedLead.phone}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">E-Mail</p>
-                  <p className="text-sm text-slate-700">{selectedLead.email || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Status</p>
-                  <p className="text-sm text-slate-700">
-                    {statusLabels[selectedLead.currentStatus] || selectedLead.currentStatus}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Nächster Termin</p>
-                  {selectedAppointment ? (
-                    <div className="text-sm text-slate-700 space-y-1">
-                      <p>
-                        {new Date(selectedAppointment.scheduledFor).toLocaleString('de-AT', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        Format: {appointmentFormat?.label || 'Telefonisch'}
-                      </p>
-                      {appointmentFormat?.detail && (
-                        <p className="text-xs text-slate-500">Ort: {appointmentFormat.detail}</p>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-700">—</p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Erstellt am</p>
-                  <p className="text-sm text-slate-700">
-                    {new Date(selectedLead.createdAt).toLocaleString('de-AT')}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Letzte Aktivität</p>
-                  <p className="text-sm text-slate-700">
-                    {selectedLead.lastActivityAt
-                      ? new Date(selectedLead.lastActivityAt).toLocaleString('de-AT')
-                      : '—'}
-                  </p>
-                </div>
-
-                {/* Quick Action Button */}
-                {getNextAction(selectedLead.currentStatus) && (
-                  <div className="pt-2">
-                    <Button
-                      onClick={() => handleLeadAction(selectedLead)}
-                      className="w-full flex items-center justify-center gap-2"
-                    >
-                      {getNextActionIcon(selectedLead.currentStatus)}
-                      {getNextActionLabel(selectedLead.currentStatus)}
-                    </Button>
-                  </div>
-                )}
-
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Schnellaktionen</p>
-                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <Button
-                      variant="secondary"
-                      disabled={!canCreateCall(selectedLead.currentStatus)}
-                      onClick={() => handleQuickAction(selectedLead, 'call')}
-                      className="flex items-center justify-center gap-2"
-                    >
-                      <Phone className="h-4 w-4" />
-                      Anruf
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      disabled={!canCreateAppointment(selectedLead.currentStatus)}
-                      onClick={() => handleQuickAction(selectedLead, 'appointment')}
-                      className="flex items-center justify-center gap-2"
-                    >
-                      <Calendar className="h-4 w-4" />
-                      Termin
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      disabled={!canCreateClosing(selectedLead.currentStatus)}
-                      onClick={() => handleQuickAction(selectedLead, 'closing')}
-                      className="flex items-center justify-center gap-2"
-                    >
-                      <Target className="h-4 w-4" />
-                      Abschluss
-                    </Button>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Aktionen sind statusabhängig. Abschluss erst nach durchgeführtem Zweittermin.
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Lead löschen</p>
-                  <Button
-                    variant="danger"
-                    className="mt-2 w-full"
-                    onClick={() => handleDeleteLead(selectedLead)}
-                    isLoading={deleteLeadMutation.isPending}
-                  >
-                    Lead endgültig löschen
-                  </Button>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Der Löschvorgang wird im Audit-Log protokolliert.
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Notizen</p>
-                  {selectedLead.note ? (
-                    <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                      <p className="text-sm text-slate-700">
-                        {expandedNotes[selectedLead.id]
-                          ? selectedLead.note
-                          : selectedLead.note.length > 180
-                            ? `${selectedLead.note.slice(0, 180)}...`
-                            : selectedLead.note}
-                      </p>
-                      {selectedLead.note.length > 180 && (
-                        <button
-                          type="button"
-                          onClick={() => toggleNote(selectedLead.id)}
-                          className="mt-2 text-xs font-medium text-sl-red hover:text-sl-red"
-                        >
-                          {expandedNotes[selectedLead.id] ? 'Weniger anzeigen' : 'Mehr anzeigen'}
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-500">Keine Notizen hinterlegt.</p>
-                  )}
-                  <div className="mt-3 space-y-2">
-                    {noteError && (
-                      <div className="rounded-lg border border-sl-red/30 bg-sl-red/10 px-3 py-2 text-xs text-sl-red">
-                        {noteError}
-                      </div>
-                    )}
-                    {noteSaved && (
-                      <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
-                        {noteSaved}
-                      </div>
-                    )}
-                    <textarea
-                      value={noteDraft}
-                      onChange={(e) => {
-                        setNoteDraft(e.target.value)
-                        if (noteError) setNoteError(null)
-                      }}
-                      maxLength={1000}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sl-red"
-                      rows={4}
-                      placeholder="Notiz ergänzen oder aktualisieren"
-                    />
-                    <div className="text-xs text-slate-400 text-right">
-                      {noteDraft.length}/1000
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => updateNoteMutation.mutate()}
-                      className="w-full rounded-lg bg-sl-red px-3 py-2 text-sm font-medium text-white hover:bg-sl-red/90 disabled:opacity-60"
-                      disabled={updateNoteMutation.isPending || noteDraft.length > 1000}
-                    >
-                      {updateNoteMutation.isPending ? 'Speichern...' : 'Notiz speichern'}
-                    </button>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-slate-500">Wähle einen Kunden aus der Tabelle.</p>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       {/* Activity Modal with pre-selected lead */}
