@@ -222,6 +222,15 @@ function ActivityModal({
     }
   }, [isOpen, preSelectedLead, preSelectedLeadId, selectedLeadId])
 
+  useEffect(() => {
+    if (!isOpen) return
+    const fallbackId = preSelectedLeadId ?? preSelectedLead?.id ?? null
+    if (!fallbackId) return
+    if (String(fallbackId) !== selectedLeadId) {
+      setSelectedLeadId(String(fallbackId))
+    }
+  }, [isOpen, preSelectedLeadId, preSelectedLead, selectedLeadId])
+
   const canCreateNewLead =
     !(activityType === 'closing' || (activityType === 'appointment' && appointmentData.type === 'second'))
 
