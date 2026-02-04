@@ -438,60 +438,62 @@ export default function StarterDashboard() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-slate-500" />
-            <CardTitle>Zuletzt erfasste Aktivitäten</CardTitle>
-          </div>
-          <p className="text-xs text-slate-500">
-            Änderungen an dieser Historie dürfen nur Admins vornehmen.
-          </p>
-        </CardHeader>
-        <CardContent>
-          {recentEvents && recentEvents.length > 0 ? (
-            <div className="space-y-4">
-              {recentEvents.map((event) => (
-                <div
-                  key={`${event.type}-${event.id}`}
-                  className="flex items-start gap-3 border-b border-slate-100 pb-3 last:border-b-0 last:pb-0"
-                >
-                  <div className="mt-1">{getEventIcon(event.type)}</div>
-                  <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-slate-900">{event.title}</p>
-                          <p className="text-xs text-slate-500">{formatDate(event.datetime)}</p>
-                        </div>
-                        {canDeleteActivity && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteEvent(event)}
-                            disabled={deleteEventMutation.isPending}
-                          >
-                            <Trash2 className="h-4 w-4 mr-1" />
-                            Löschen
-                          </Button>
-                        )}
-                      </div>
-                    {event.meta && (
-                      <p className="text-xs text-slate-500 mt-1">{event.meta}</p>
-                    )}
-                    {event.notes && (
-                      <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                        {event.notes}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
+      {user?.role !== 'starter' && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-slate-500" />
+              <CardTitle>Zuletzt erfasste Aktivitäten</CardTitle>
             </div>
-          ) : (
-            <p className="text-sm text-slate-500">Noch keine Aktivitäten erfasst.</p>
-          )}
-        </CardContent>
-      </Card>
+            <p className="text-xs text-slate-500">
+              Änderungen an dieser Historie dürfen nur Admins vornehmen.
+            </p>
+          </CardHeader>
+          <CardContent>
+            {recentEvents && recentEvents.length > 0 ? (
+              <div className="space-y-4">
+                {recentEvents.map((event) => (
+                  <div
+                    key={`${event.type}-${event.id}`}
+                    className="flex items-start gap-3 border-b border-slate-100 pb-3 last:border-b-0 last:pb-0"
+                  >
+                    <div className="mt-1">{getEventIcon(event.type)}</div>
+                    <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">{event.title}</p>
+                            <p className="text-xs text-slate-500">{formatDate(event.datetime)}</p>
+                          </div>
+                          {canDeleteActivity && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteEvent(event)}
+                              disabled={deleteEventMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Löschen
+                            </Button>
+                          )}
+                        </div>
+                      {event.meta && (
+                        <p className="text-xs text-slate-500 mt-1">{event.meta}</p>
+                      )}
+                      {event.notes && (
+                        <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                          {event.notes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Noch keine Aktivitäten erfasst.</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {canLogActivity && (
         <ActivityModal

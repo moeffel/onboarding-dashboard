@@ -118,6 +118,7 @@ function ActivityModal({
     appointmentDatetime: string
     appointmentMode: AppointmentMode
     appointmentLocation: string
+    leadOnly: boolean
   }>({
     contactRef: '',
     outcome: 'call_scheduled',
@@ -127,6 +128,7 @@ function ActivityModal({
     appointmentDatetime: '',
     appointmentMode: 'in_person',
     appointmentLocation: '',
+    leadOnly: false,
   })
 
   const [appointmentData, setAppointmentData] = useState<{
@@ -172,6 +174,7 @@ function ActivityModal({
         appointmentDatetime: '',
         appointmentMode: 'in_person',
         appointmentLocation: '',
+        leadOnly: false,
       })
       setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'in_person', location: '' })
       setClosingData({ units: '', result: 'won', productCategory: '', notes: '' })
@@ -312,11 +315,12 @@ function ActivityModal({
   }, [callData.appointmentType])
 
   // Check if callback is required (no answer, busy, voicemail)
-  const needsCallback = ['call_scheduled', 'no_answer', 'busy', 'voicemail'].includes(callData.outcome)
+  const needsCallback =
+    !callData.leadOnly && ['call_scheduled', 'no_answer', 'busy', 'voicemail'].includes(callData.outcome)
   // Check if appointment scheduling is required (answered with appointment)
-  const needsAppointment = callData.outcome === 'answered_appt'
+  const needsAppointment = !callData.leadOnly && callData.outcome === 'answered_appt'
   // Check if lead will be archived (declined)
-  const willArchive = callData.outcome === 'declined'
+  const willArchive = !callData.leadOnly && callData.outcome === 'declined'
   const appointmentTypeLocked = !!selectedLead
   const callAppointmentTypeOptions = selectedLeadId
     ? appointmentTypeOptions
@@ -364,6 +368,9 @@ function ActivityModal({
   if (!isOpen) return null
 
   const callOutcomeHint = () => {
+    if (callData.leadOnly) {
+      return 'Lead wird angelegt, ohne einen Anruf zu dokumentieren.'
+    }
     if (needsAppointment) {
       return callData.appointmentType === 'second'
         ? 'Zweittermin wird nach dem Gespräch direkt geplant.'
@@ -428,6 +435,12 @@ function ActivityModal({
         }
         const createdLead = (await leadResponse.json()) as Lead
         leadId = createdLead.id
+        if (activityType === 'call' && callData.leadOnly) {
+          onSuccess()
+          onClose()
+          resetForm()
+          return
+        }
       }
 
       let endpoint = ''
@@ -621,6 +634,7 @@ function ActivityModal({
       appointmentDatetime: '',
       appointmentMode: 'in_person',
       appointmentLocation: '',
+      leadOnly: false,
     })
     setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'in_person', location: '' })
     setClosingData({ units: '', result: 'won', productCategory: '', notes: '' })
@@ -721,11 +735,25 @@ function ActivityModal({
 
           {activityType === 'call' && (
             <>
+              {!selectedLeadId && (
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <input
+                    id="lead-only"
+                    type="checkbox"
+                    checked={callData.leadOnly}
+                    onChange={(e) => setCallData({ ...callData, leadOnly: e.target.checked })}
+                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                  />
+                  <label htmlFor="lead-only">Nur Lead anlegen (ohne Anruf)</label>
+                </div>
+              )}
+
               <Select
                 label="Ergebnis"
                 value={callData.outcome}
                 onChange={(e) => setCallData({ ...callData, outcome: e.target.value })}
                 options={callOutcomeOptions}
+                disabled={callData.leadOnly}
               />
               {callOutcomeHint() && (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
