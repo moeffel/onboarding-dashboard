@@ -257,9 +257,11 @@ function ActivityModal({
       return
     }
     if (!filteredLeads.some((lead) => String(lead.id) === selectedLeadId)) {
+      const keepSelected = Boolean(preSelectedLeadId || preSelectedLead)
+      if (keepSelected) return
       setSelectedLeadId(canCreateNewLead ? '' : (filteredLeads[0] ? String(filteredLeads[0].id) : ''))
     }
-  }, [canCreateNewLead, filteredLeads, selectedLeadId, leadsLoaded])
+  }, [canCreateNewLead, filteredLeads, selectedLeadId, leadsLoaded, preSelectedLead, preSelectedLeadId])
 
   useEffect(() => {
     if (!isOpen) return
