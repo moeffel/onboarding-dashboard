@@ -182,6 +182,16 @@ export default function Customers() {
           return direction * getStatusLabel(a.currentStatus).localeCompare(getStatusLabel(b.currentStatus), 'de-AT')
         case 'next_action':
           return direction * (getNextActionRank(a) - getNextActionRank(b))
+        case 'created_at': {
+          const aTime = new Date(a.createdAt).getTime()
+          const bTime = new Date(b.createdAt).getTime()
+          return direction * (aTime - bTime)
+        }
+        case 'next_activity': {
+          const aTime = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : Number.NEGATIVE_INFINITY
+          const bTime = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : Number.NEGATIVE_INFINITY
+          return direction * (aTime - bTime)
+        }
         case 'name':
         default:
           return direction * a.fullName.localeCompare(b.fullName, 'de-AT')
@@ -441,8 +451,24 @@ export default function Customers() {
                             onSort={handleSort}
                           />
                         </th>
-                        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500">Erstellt am</th>
-                        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500">Nächste Aktivität</th>
+                        <th className="text-left py-3 px-4">
+                          <SortableHeader
+                            label="Erstellt am"
+                            sortKey="created_at"
+                            activeKey={leadSort.key}
+                            direction={leadSort.direction}
+                            onSort={handleSort}
+                          />
+                        </th>
+                        <th className="text-left py-3 px-4">
+                          <SortableHeader
+                            label="Nächste Aktivität am"
+                            sortKey="next_activity"
+                            activeKey={leadSort.key}
+                            direction={leadSort.direction}
+                            onSort={handleSort}
+                          />
+                        </th>
                         <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500">Löschen</th>
                       </tr>
                     </thead>

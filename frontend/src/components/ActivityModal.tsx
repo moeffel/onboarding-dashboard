@@ -110,6 +110,7 @@ function ActivityModal({
   const [error, setError] = useState<string | null>(null)
   const [closingCongrats, setClosingCongrats] = useState<string | null>(null)
   const [leads, setLeads] = useState<Lead[]>([])
+  const [leadsLoaded, setLeadsLoaded] = useState(false)
   const [calendarEntries, setCalendarEntries] = useState<CalendarEntry[]>([])
   const [selectedLeadId, setSelectedLeadId] = useState<string>('')
 
@@ -166,9 +167,11 @@ function ActivityModal({
 
   useEffect(() => {
     if (isOpen) {
+      const initialLeadId = preSelectedLeadId ?? preSelectedLead?.id ?? null
       setActivityType(initialType)
       setError(null)
       setClosingCongrats(null)
+      setLeadsLoaded(false)
       setCallData({
         contactRef: '',
         outcome: 'call_scheduled',
@@ -183,7 +186,7 @@ function ActivityModal({
       setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'in_person', location: '' })
       setClosingData({ units: '', result: 'won', productCategory: '', notes: '' })
       setLeadData({ fullName: '', phone: '', email: '' })
-      setSelectedLeadId(preSelectedLeadId ? String(preSelectedLeadId) : '')
+      setSelectedLeadId(initialLeadId ? String(initialLeadId) : '')
       setLeads(preSelectedLead ? [preSelectedLead] : [])
       setCalendarEntries([])
       // Pre-select lead if provided
@@ -195,8 +198,12 @@ function ActivityModal({
           } else {
             setLeads(data)
           }
+          setLeadsLoaded(true)
         })
-        .catch(() => setLeads([]))
+        .catch(() => {
+          setLeads([])
+          setLeadsLoaded(true)
+        })
     }
   }, [initialType, isOpen, preSelectedLead, preSelectedLeadId])
 
@@ -205,6 +212,15 @@ function ActivityModal({
       setCallData((prev) => ({ ...prev, appointmentType: 'first' }))
     }
   }, [callData.appointmentType, selectedLeadId])
+
+  useEffect(() => {
+    if (!isOpen) return
+    if (selectedLeadId) return
+    const fallbackId = preSelectedLeadId ?? preSelectedLead?.id ?? null
+    if (fallbackId) {
+      setSelectedLeadId(String(fallbackId))
+    }
+  }, [isOpen, preSelectedLead, preSelectedLeadId, selectedLeadId])
 
   const canCreateNewLead =
     !(activityType === 'closing' || (activityType === 'appointment' && appointmentData.type === 'second'))
@@ -233,6 +249,7 @@ function ActivityModal({
   }, [activityType, appointmentData.type, leads, selectedLeadId])
 
   useEffect(() => {
+    if (!leadsLoaded) return
     if (!selectedLeadId) {
       if (!canCreateNewLead && filteredLeads[0]) {
         setSelectedLeadId(String(filteredLeads[0].id))
@@ -242,7 +259,7 @@ function ActivityModal({
     if (!filteredLeads.some((lead) => String(lead.id) === selectedLeadId)) {
       setSelectedLeadId(canCreateNewLead ? '' : (filteredLeads[0] ? String(filteredLeads[0].id) : ''))
     }
-  }, [canCreateNewLead, filteredLeads, selectedLeadId])
+  }, [canCreateNewLead, filteredLeads, selectedLeadId, leadsLoaded])
 
   useEffect(() => {
     if (!isOpen) return
