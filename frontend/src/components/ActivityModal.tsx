@@ -2,25 +2,18 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import Button from './ui/Button'
 import Input from './ui/Input'
 import Select from './ui/Select'
-import { Lead } from '../types'
+import { CalendarEntry, Lead } from '../types'
+import { AppointmentMode, buildAppointmentLocation, parseAppointmentLocation } from '../lib/appointments'
 
 type ActivityType = 'call' | 'appointment' | 'closing'
 
 interface ActivityModalProps {
   isOpen: boolean
   initialType?: ActivityType
+  preSelectedLeadId?: number | null
   onClose: () => void
   onSuccess: () => void
 }
-
-const callOutcomeOptions = [
-  { value: 'answered', label: 'Angenommen' },
-  { value: 'no_answer', label: 'Keine Antwort' },
-  { value: 'declined', label: 'Termin abgelehnt' },
-  { value: 'busy', label: 'Besetzt' },
-  { value: 'voicemail', label: 'Mailbox' },
-  { value: 'wrong_number', label: 'Falsche Nummer' },
-]
 
 const appointmentTypeOptions = [
   { value: 'first', label: 'Ersttermin' },
@@ -30,13 +23,82 @@ const appointmentTypeOptions = [
 const appointmentResultOptions = [
   { value: 'set', label: 'Vereinbart' },
   { value: 'completed', label: 'Durchgeführt' },
-  { value: 'cancelled', label: 'Abgesagt' },
+  { value: 'cancelled', label: 'Abgelehnt' },
   { value: 'no_show', label: 'No-Show' },
 ]
+
+const appointmentModeOptions = [
+  { value: 'phone', label: 'Telefonisch' },
+  { value: 'in_person', label: 'Persönlich' },
+  { value: 'online', label: 'Online' },
+]
+
+const statusLabels: Record<string, string> = {
+  new_cold: 'Neu / Kaltakquise',
+  call_scheduled: 'Anruf geplant',
+  contact_established: 'Kontakt hergestellt',
+  first_appt_pending: 'Ersttermin in Klärung',
+  first_appt_scheduled: 'Ersttermin vereinbart',
+  first_appt_completed: 'Ersttermin durchgeführt',
+  second_appt_scheduled: 'Zweittermin vereinbart',
+  second_appt_completed: 'Zweittermin durchgeführt',
+  closed_won: 'Abschluss (Won)',
+  closed_lost: 'Verloren (Lost)',
+}
+
+const getPreferredAppointmentType = (lead: Lead | null) => {
+  if (!lead) return 'first'
+  if (['first_appt_completed', 'second_appt_scheduled', 'second_appt_completed'].includes(lead.currentStatus)) {
+    return 'second'
+  }
+  return 'first'
+}
+
+
+const toLocalDateTimeInput = (value: string) => {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
+}
+
+const formatShortDateTime = (value: string) =>
+  new Date(value).toLocaleString('de-AT', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+
+const getNextStepLabel = (status?: string) => {
+  switch (status) {
+    case 'new_cold':
+    case 'call_scheduled':
+      return 'Anruf durchführen'
+    case 'contact_established':
+    case 'first_appt_pending':
+      return 'Ersttermin vereinbaren'
+    case 'first_appt_scheduled':
+      return 'Ersttermin durchführen'
+    case 'first_appt_completed':
+      return 'Zweittermin vereinbaren'
+    case 'second_appt_scheduled':
+      return 'Zweittermin durchführen'
+    case 'second_appt_completed':
+      return 'Abschluss erfassen'
+    case 'closed_won':
+      return 'Abgeschlossen'
+    case 'closed_lost':
+      return 'Archiv'
+    default:
+      return '—'
+  }
+}
 
 function ActivityModal({
   isOpen,
   initialType = 'call',
+  preSelectedLeadId,
   onClose,
   onSuccess,
 }: ActivityModalProps) {
@@ -44,20 +106,43 @@ function ActivityModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [leads, setLeads] = useState<Lead[]>([])
+  const [calendarEntries, setCalendarEntries] = useState<CalendarEntry[]>([])
   const [selectedLeadId, setSelectedLeadId] = useState<string>('')
 
-  const [callData, setCallData] = useState({
+  const [callData, setCallData] = useState<{
+    contactRef: string
+    outcome: string
+    notes: string
+    nextCallAt: string
+    appointmentType: string
+    appointmentDatetime: string
+    appointmentMode: AppointmentMode
+    appointmentLocation: string
+  }>({
     contactRef: '',
-    outcome: 'answered',
+    outcome: 'answered_appt',
     notes: '',
     nextCallAt: '',
+    appointmentType: 'first',
+    appointmentDatetime: '',
+    appointmentMode: 'phone',
+    appointmentLocation: '',
   })
 
-  const [appointmentData, setAppointmentData] = useState({
+  const [appointmentData, setAppointmentData] = useState<{
+    type: string
+    result: string
+    notes: string
+    datetime: string
+    mode: AppointmentMode
+    location: string
+  }>({
     type: 'first',
     result: 'set',
     notes: '',
     datetime: '',
+    mode: 'phone',
+    location: '',
   })
 
   const [closingData, setClosingData] = useState({
@@ -76,12 +161,83 @@ function ActivityModal({
     if (isOpen) {
       setActivityType(initialType)
       setError(null)
+      setCallData({
+        contactRef: '',
+        outcome: 'answered_appt',
+        notes: '',
+        nextCallAt: '',
+        appointmentType: 'first',
+        appointmentDatetime: '',
+        appointmentMode: 'phone',
+        appointmentLocation: '',
+      })
+      setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'phone', location: '' })
+      setClosingData({ units: '', productCategory: '', notes: '' })
+      setLeadData({ fullName: '', phone: '', email: '' })
+      setSelectedLeadId(preSelectedLeadId ? String(preSelectedLeadId) : '')
+      setCalendarEntries([])
+      // Pre-select lead if provided
       fetch('/api/leads', { credentials: 'include' })
         .then((res) => (res.ok ? res.json() : Promise.reject()))
         .then((data: Lead[]) => setLeads(data))
         .catch(() => setLeads([]))
     }
-  }, [initialType, isOpen])
+  }, [initialType, isOpen, preSelectedLeadId])
+
+  useEffect(() => {
+    if (!isOpen) return
+    if (!selectedLeadId) {
+      setCalendarEntries([])
+      return
+    }
+    const controller = new AbortController()
+    const params = new URLSearchParams({
+      period: 'all',
+      lead_id: selectedLeadId,
+    })
+    fetch(`/api/leads/calendar?${params.toString()}`, {
+      credentials: 'include',
+      signal: controller.signal,
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data: CalendarEntry[]) => setCalendarEntries(data))
+      .catch(() => setCalendarEntries([]))
+    return () => controller.abort()
+  }, [isOpen, selectedLeadId])
+
+  const selectedLead = useMemo(() => {
+    if (!selectedLeadId) return null
+    return leads.find((lead) => String(lead.id) === selectedLeadId) ?? null
+  }, [leads, selectedLeadId])
+
+  const minDateTime = useMemo(() => {
+    const now = new Date()
+    now.setSeconds(0, 0)
+    return toLocalDateTimeInput(now.toISOString())
+  }, [isOpen])
+
+  const preferredAppointmentType = useMemo(
+    () => getPreferredAppointmentType(selectedLead),
+    [selectedLead]
+  )
+
+  useEffect(() => {
+    if (!selectedLead) return
+    setAppointmentData((prev) => ({ ...prev, type: preferredAppointmentType }))
+    setCallData((prev) => ({ ...prev, appointmentType: preferredAppointmentType }))
+  }, [preferredAppointmentType, selectedLead])
+
+  const scheduledEntry = useMemo(() => {
+    if (!selectedLead) return null
+    const appointmentType = activityType === 'call' ? callData.appointmentType : appointmentData.type
+    const status = appointmentType === 'second' ? 'second_appt_scheduled' : 'first_appt_scheduled'
+    return (
+      calendarEntries
+        .filter((entry) => entry.leadId === selectedLead.id && entry.status === status)
+        .sort((a, b) => new Date(b.scheduledFor).getTime() - new Date(a.scheduledFor).getTime())[0] ||
+      null
+    )
+  }, [calendarEntries, selectedLead, appointmentData.type, callData.appointmentType, activityType])
 
   const activeLabel = useMemo(() => {
     switch (activityType) {
@@ -94,7 +250,97 @@ function ActivityModal({
     }
   }, [activityType])
 
+  const callOutcomeOptions = useMemo(() => {
+    const appointmentLabel =
+      callData.appointmentType === 'second' ? 'Zweittermin angenommen' : 'Ersttermin angenommen'
+    return [
+      { value: 'answered_appt', label: appointmentLabel },
+      { value: 'answered', label: 'Angenommen (kein Termin)' },
+      { value: 'no_answer', label: 'Nicht erreicht' },
+      { value: 'busy', label: 'Besetzt' },
+      { value: 'voicemail', label: 'Mailbox' },
+      { value: 'declined', label: 'Abgelehnt' },
+      { value: 'wrong_number', label: 'Falsche Nummer' },
+    ]
+  }, [callData.appointmentType])
+
+  // Check if callback is required (no answer, busy, voicemail)
+  const needsCallback = ['no_answer', 'busy', 'voicemail'].includes(callData.outcome)
+  // Check if appointment scheduling is required (answered with appointment)
+  const needsAppointment = callData.outcome === 'answered_appt'
+  // Check if lead will be archived (declined)
+  const willArchive = callData.outcome === 'declined'
+  const appointmentTypeLocked = !!selectedLead
+
+  useEffect(() => {
+    if (!scheduledEntry) return
+    if (!appointmentData.datetime) {
+      setAppointmentData((prev) => ({
+        ...prev,
+        datetime: toLocalDateTimeInput(scheduledEntry.scheduledFor),
+      }))
+    }
+    if (!appointmentData.location && scheduledEntry.location) {
+      const parsed = parseAppointmentLocation(scheduledEntry.location)
+      setAppointmentData((prev) => ({
+        ...prev,
+        mode: parsed.mode,
+        location: parsed.detail,
+      }))
+    }
+    if (needsAppointment && !callData.appointmentDatetime) {
+      setCallData((prev) => ({
+        ...prev,
+        appointmentDatetime: toLocalDateTimeInput(scheduledEntry.scheduledFor),
+      }))
+    }
+    if (needsAppointment && !callData.appointmentLocation && scheduledEntry.location) {
+      const parsed = parseAppointmentLocation(scheduledEntry.location)
+      setCallData((prev) => ({
+        ...prev,
+        appointmentMode: parsed.mode,
+        appointmentLocation: parsed.detail,
+      }))
+    }
+  }, [
+    scheduledEntry,
+    appointmentData.datetime,
+    appointmentData.location,
+    needsAppointment,
+    callData.appointmentDatetime,
+    callData.appointmentLocation,
+  ])
+
   if (!isOpen) return null
+
+  const callOutcomeHint = () => {
+    if (needsAppointment) {
+      return callData.appointmentType === 'second'
+        ? 'Zweittermin wird nach dem Gespräch direkt geplant.'
+        : 'Ersttermin wird nach dem Gespräch direkt geplant.'
+    }
+    if (needsCallback) {
+      return 'Bitte Rückruftermin setzen, damit der Lead im Kalender erscheint.'
+    }
+    if (willArchive) {
+      return 'Abgelehnte Leads werden automatisch archiviert.'
+    }
+    if (callData.outcome === 'wrong_number') {
+      return 'Falsche Nummer führt zur Archivierung.'
+    }
+    if (callData.outcome === 'answered') {
+      return 'Kontakt hergestellt. Als nächstes Ersttermin anbieten.'
+    }
+    return ''
+  }
+
+  const normalizeDateTime = (value: string, errorMessage: string) => {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) {
+      throw new Error(errorMessage)
+    }
+    return value
+  }
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -129,16 +375,87 @@ function ActivityModal({
       let payload: Record<string, unknown> = {}
 
       if (activityType === 'call') {
+        // Validate required fields based on outcome
+        if (needsCallback && !callData.nextCallAt) {
+          throw new Error('Rückrufdatum ist erforderlich wenn keine Antwort')
+        }
+        if (needsAppointment && !callData.appointmentDatetime) {
+          throw new Error('Termindatum ist erforderlich bei Termin angenommen')
+        }
+
         endpoint = 'call'
+        // Map answered_appt back to answered for backend
+        const backendOutcome = callData.outcome === 'answered_appt' ? 'answered' : callData.outcome
         payload = {
           contactRef: callData.contactRef || undefined,
-          outcome: callData.outcome,
+          outcome: backendOutcome,
           notes: callData.notes || undefined,
           leadId,
           nextCallAt: callData.nextCallAt
-            ? new Date(callData.nextCallAt).toISOString()
+            ? normalizeDateTime(callData.nextCallAt, 'Rückrufdatum ist ungültig')
             : undefined,
         }
+
+        // Submit the call first
+        const callResponse = await fetch(`/api/events/${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        })
+
+        if (!callResponse.ok) {
+          const payload = await callResponse.json().catch(() => null)
+          const detail = payload?.detail ?? payload
+          const message =
+            typeof detail === 'string'
+              ? detail
+              : Array.isArray(detail)
+                ? detail.map((item) => item?.msg || JSON.stringify(item)).join(', ')
+                : detail
+                  ? JSON.stringify(detail)
+                  : 'Speichern fehlgeschlagen'
+          throw new Error(message)
+        }
+
+        // If appointment was accepted, create the appointment
+        if (needsAppointment && callData.appointmentDatetime) {
+          const appointmentPayload = {
+            type: callData.appointmentType,
+            result: 'set',
+            datetime: normalizeDateTime(callData.appointmentDatetime, 'Termin Datum/Uhrzeit ist ungültig'),
+            notes: callData.notes || undefined,
+            location: buildAppointmentLocation(callData.appointmentMode, callData.appointmentLocation),
+            leadId,
+          }
+          const apptResponse = await fetch('/api/events/appointment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(appointmentPayload),
+          })
+          if (!apptResponse.ok) {
+            console.warn('Termin konnte nicht automatisch erstellt werden')
+          }
+        }
+
+        // If declined, archive the lead
+        if (willArchive && leadId) {
+          await fetch(`/api/leads/${leadId}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              toStatus: 'closed_lost',
+              reason: 'declined',
+            }),
+          })
+        }
+
+        onSuccess()
+        onClose()
+        resetForm()
+        return
       } else if (activityType === 'appointment') {
         if (appointmentData.result === 'set' && !appointmentData.datetime) {
           throw new Error('Datum ist für vereinbarte Termine erforderlich')
@@ -148,8 +465,9 @@ function ActivityModal({
           type: appointmentData.type,
           result: appointmentData.result,
           notes: appointmentData.notes || undefined,
+          location: buildAppointmentLocation(appointmentData.mode, appointmentData.location),
           datetime: appointmentData.datetime
-            ? new Date(appointmentData.datetime).toISOString()
+            ? normalizeDateTime(appointmentData.datetime, 'Termin Datum/Uhrzeit ist ungültig')
             : undefined,
           leadId,
         }
@@ -184,13 +502,16 @@ function ActivityModal({
         throw new Error(message)
       }
 
+      if (activityType === 'appointment' && appointmentData.type === 'second' && appointmentData.result === 'completed') {
+        onSuccess()
+        setActivityType('closing')
+        setClosingData({ units: '', productCategory: '', notes: '' })
+        return
+      }
+
       onSuccess()
       onClose()
-      setCallData({ contactRef: '', outcome: 'answered', notes: '', nextCallAt: '' })
-      setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '' })
-      setClosingData({ units: '', productCategory: '', notes: '' })
-      setLeadData({ fullName: '', phone: '', email: '' })
-      setSelectedLeadId('')
+      resetForm()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler')
     } finally {
@@ -198,9 +519,26 @@ function ActivityModal({
     }
   }
 
+  const resetForm = () => {
+    setCallData({
+      contactRef: '',
+      outcome: 'answered_appt',
+      notes: '',
+      nextCallAt: '',
+      appointmentType: 'first',
+      appointmentDatetime: '',
+      appointmentMode: 'phone',
+      appointmentLocation: '',
+    })
+    setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'phone', location: '' })
+    setClosingData({ units: '', productCategory: '', notes: '' })
+    setLeadData({ fullName: '', phone: '', email: '' })
+    setSelectedLeadId('')
+  }
+
   return (
     <div className="fixed inset-0 bg-black/15 backdrop-blur-sm flex items-center justify-center z-50 px-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl p-6 relative">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl p-4 sm:p-6 relative max-h-[90vh] overflow-y-auto">
         <button
           type="button"
           onClick={onClose}
@@ -276,31 +614,119 @@ function ActivityModal({
                 />
               </div>
             )}
+            {selectedLead && (
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 flex items-center justify-between">
+                <span>Status: {statusLabels[selectedLead.currentStatus] || selectedLead.currentStatus}</span>
+                <span>Nächster Schritt: {getNextStepLabel(selectedLead.currentStatus)}</span>
+              </div>
+            )}
           </div>
+
           {activityType === 'call' && (
             <>
-              <Input
-                label="Kontakt (optional)"
-                value={callData.contactRef}
-                onChange={(e) => setCallData({ ...callData, contactRef: e.target.value })}
-                placeholder="Kundenname oder Referenz"
-              />
               <Select
                 label="Ergebnis"
                 value={callData.outcome}
                 onChange={(e) => setCallData({ ...callData, outcome: e.target.value })}
                 options={callOutcomeOptions}
               />
-              {(callData.outcome === 'no_answer' ||
-                callData.outcome === 'busy' ||
-                callData.outcome === 'voicemail') && (
-                <Input
-                  label="Erneuter Anruf (Datum/Uhrzeit)"
-                  type="datetime-local"
-                  value={callData.nextCallAt}
-                  onChange={(e) => setCallData({ ...callData, nextCallAt: e.target.value })}
-                />
+              {callOutcomeHint() && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  {callOutcomeHint()}
+                </div>
               )}
+
+              {/* Show appointment field when "Termin angenommen" */}
+              {needsAppointment && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">
+                  <p className="text-sm font-medium text-red-700">
+                    {callData.appointmentType === 'second' ? 'Zweittermin vereinbaren' : 'Ersttermin vereinbaren'}
+                  </p>
+                  {scheduledEntry && (
+                    <div className="rounded-md border border-red-200 bg-white px-3 py-2 text-xs text-red-700 space-y-1">
+                      <p className="font-semibold">Bereits terminiert</p>
+                      <p>{formatShortDateTime(scheduledEntry.scheduledFor)}</p>
+                      {scheduledEntry.location && <p>Ort: {scheduledEntry.location}</p>}
+                    </div>
+                  )}
+                  <Select
+                    label="Terminart"
+                    value={callData.appointmentType}
+                    onChange={(e) => setCallData({ ...callData, appointmentType: e.target.value })}
+                    options={appointmentTypeOptions}
+                    disabled={appointmentTypeLocked}
+                  />
+                  <Input
+                    label="Termin Datum/Uhrzeit (Pflicht)"
+                    type="datetime-local"
+                    value={callData.appointmentDatetime}
+                    onChange={(e) => setCallData({ ...callData, appointmentDatetime: e.target.value })}
+                    min={minDateTime}
+                    required
+                  />
+                  <Select
+                    label="Terminformat"
+                    value={callData.appointmentMode}
+                    onChange={(e) => setCallData({ ...callData, appointmentMode: e.target.value })}
+                    options={appointmentModeOptions}
+                  />
+                  {callData.appointmentMode === 'in_person' && (
+                    <Input
+                      label="Ort (optional)"
+                      value={callData.appointmentLocation}
+                      onChange={(e) => setCallData({ ...callData, appointmentLocation: e.target.value })}
+                      placeholder="z. B. Büro, Filiale, Café"
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Show callback field when no answer/busy/voicemail */}
+              {needsCallback && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+                  <p className="text-sm font-medium text-amber-700">Rückruf planen (Pflicht)</p>
+                  <Input
+                    label="Rückruf Datum/Uhrzeit"
+                    type="datetime-local"
+                    value={callData.nextCallAt}
+                    onChange={(e) => setCallData({ ...callData, nextCallAt: e.target.value })}
+                    min={minDateTime}
+                    required
+                  />
+                  <p className="text-xs text-amber-700/80">
+                    Bei „Nicht erreicht“, „Besetzt“ oder „Mailbox“ ist ein Rückruf erforderlich.
+                  </p>
+                </div>
+              )}
+
+              {/* Show archive warning when declined */}
+              {willArchive && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 p-4">
+                  <p className="text-sm font-medium text-rose-700">
+                    Der Lead wird ins Archiv verschoben
+                  </p>
+                  <p className="text-xs text-rose-600 mt-1">
+                    Abgelehnte Leads werden automatisch archiviert.
+                  </p>
+                </div>
+              )}
+
+              {!needsCallback && !needsAppointment && callData.outcome === 'answered' && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm font-medium text-slate-700">Kontakt hergestellt</p>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Der Lead bleibt aktiv. Nächster Schritt: Ersttermin anbieten.
+                  </p>
+                </div>
+              )}
+
+              <Input
+                label="Kontakt (optional)"
+                value={callData.contactRef}
+                onChange={(e) => setCallData({ ...callData, contactRef: e.target.value })}
+                placeholder="Kundenname oder Referenz"
+              />
+
               <div className="space-y-1">
                 <label className="block text-sm font-medium text-slate-700">
                   Notizen (optional)
@@ -308,7 +734,7 @@ function ActivityModal({
                 <textarea
                   value={callData.notes}
                   onChange={(e) => setCallData({ ...callData, notes: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
                   rows={3}
                   placeholder="Besondere Hinweise zum Gespräch"
                 />
@@ -318,11 +744,19 @@ function ActivityModal({
 
           {activityType === 'appointment' && (
             <>
+              {scheduledEntry && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 space-y-1">
+                  <p className="font-semibold text-slate-700">Geplanter Termin</p>
+                  <p>{formatShortDateTime(scheduledEntry.scheduledFor)}</p>
+                  {scheduledEntry.location && <p>Ort: {scheduledEntry.location}</p>}
+                </div>
+              )}
               <Select
                 label="Terminart"
                 value={appointmentData.type}
                 onChange={(e) => setAppointmentData({ ...appointmentData, type: e.target.value })}
                 options={appointmentTypeOptions}
+                disabled={appointmentTypeLocked}
               />
               <Select
                 label="Status"
@@ -330,13 +764,48 @@ function ActivityModal({
                 onChange={(e) => setAppointmentData({ ...appointmentData, result: e.target.value })}
                 options={appointmentResultOptions}
               />
+              {appointmentData.result === 'completed' && appointmentData.type === 'first' && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">
+                  Ersttermin abgeschlossen. Nächster Schritt: Zweittermin vereinbaren.
+                </div>
+              )}
+              {appointmentData.result === 'completed' && appointmentData.type === 'second' && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">
+                  Zweittermin abgeschlossen. Nächster Schritt: Abschluss erfassen.
+                </div>
+              )}
+              {appointmentData.result === 'cancelled' && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+                  Der Lead wird als verloren markiert und archiviert.
+                </div>
+              )}
+              {appointmentData.result === 'no_show' && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+                  No-show wird als Drop-Off gemessen. Termin bleibt als ausstehend geführt.
+                </div>
+              )}
               <Input
                 label="Termin Datum/Uhrzeit"
                 type="datetime-local"
                 value={appointmentData.datetime}
                 onChange={(e) => setAppointmentData({ ...appointmentData, datetime: e.target.value })}
+                min={minDateTime}
                 required={appointmentData.result === 'set'}
               />
+              <Select
+                label="Terminformat"
+                value={appointmentData.mode}
+                onChange={(e) => setAppointmentData({ ...appointmentData, mode: e.target.value })}
+                options={appointmentModeOptions}
+              />
+              {appointmentData.mode === 'in_person' && (
+                <Input
+                  label="Ort (optional)"
+                  value={appointmentData.location}
+                  onChange={(e) => setAppointmentData({ ...appointmentData, location: e.target.value })}
+                  placeholder="z. B. Büro, Filiale, Café"
+                />
+              )}
               <div className="space-y-1">
                 <label className="block text-sm font-medium text-slate-700">
                   Notizen (optional)
@@ -344,7 +813,7 @@ function ActivityModal({
                 <textarea
                   value={appointmentData.notes}
                   onChange={(e) => setAppointmentData({ ...appointmentData, notes: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
                   rows={3}
                   placeholder="Was wurde vereinbart?"
                 />
@@ -376,7 +845,7 @@ function ActivityModal({
                 <textarea
                   value={closingData.notes}
                   onChange={(e) => setClosingData({ ...closingData, notes: e.target.value })}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500"
                   rows={3}
                   placeholder="Details zum Abschluss"
                 />

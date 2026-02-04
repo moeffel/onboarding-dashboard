@@ -4,6 +4,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import StarterDashboard from './pages/StarterDashboard'
 import TeamleiterDashboard from './pages/TeamleiterDashboard'
+import AdminDashboard from './pages/AdminDashboard'
 import AdminConsole from './pages/AdminConsole'
 import Customers from './pages/Customers'
 import Layout from './components/Layout'
@@ -14,7 +15,7 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode;
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
       </div>
     )
   }
@@ -32,6 +33,9 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode;
 
 function DashboardEntry() {
   const { user } = useAuth()
+  if (user?.role === 'admin') {
+    return <AdminDashboard />
+  }
   if (user?.role === 'teamleiter') {
     return <TeamleiterDashboard />
   }
@@ -46,7 +50,7 @@ function AppRoutes() {
     if (!user) return '/login'
     switch (user.role) {
       case 'admin':
-        return '/admin'
+        return '/dashboard'
       case 'teamleiter':
         return '/team'
       default:
@@ -74,7 +78,7 @@ function AppRoutes() {
       <Route
         path="/customers"
         element={
-          <ProtectedRoute allowedRoles={['starter', 'teamleiter', 'admin']}>
+          <ProtectedRoute allowedRoles={['starter']}>
             <Layout>
               <Customers />
             </Layout>

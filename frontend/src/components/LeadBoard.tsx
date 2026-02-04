@@ -29,6 +29,13 @@ interface LeadBoardProps {
 }
 
 export default function LeadBoard({ leads, isEditable = false, onStatusUpdate }: LeadBoardProps) {
+  const minDateTime = useMemo(() => {
+    const now = new Date()
+    now.setSeconds(0, 0)
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+    return local.toISOString().slice(0, 16)
+  }, [])
+
   const grouped = useMemo(() => {
     const map = new Map<LeadStatus, Lead[]>()
     statusColumns.forEach((col) => map.set(col.value, []))
@@ -109,6 +116,7 @@ export default function LeadBoard({ leads, isEditable = false, onStatusUpdate }:
                                 [lead.id]: e.target.value,
                               }))
                             }
+                            min={minDateTime}
                           />
                         )}
                         <Button

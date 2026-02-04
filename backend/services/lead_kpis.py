@@ -37,8 +37,10 @@ async def calculate_funnel_kpis(
     user_id: Optional[int] = None,
     team_id: Optional[int] = None,
     period: str = "week",
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
 ) -> dict:
-    period_start = get_period_start(period)
+    period_start = start or get_period_start(period)
 
     lead_ids = await _lead_scope_filter(db, user_id=user_id, team_id=team_id)
     if not lead_ids:
@@ -50,19 +52,40 @@ async def calculate_funnel_kpis(
             "timeMetrics": {},
         }
 
-    leads_created_result = await db.execute(
-        select(func.count(Lead.id))
+    period_lead_stmt = (
+        select(Lead.id)
         .where(Lead.id.in_(lead_ids))
         .where(Lead.created_at >= period_start)
     )
+    if end is not None:
+        period_lead_stmt = period_lead_stmt.where(Lead.created_at <= end)
+    period_lead_result = await db.execute(period_lead_stmt)
+    lead_ids_in_period = [row[0] for row in period_lead_result.all()]
+    if not lead_ids_in_period:
+        return {
+            "leadsCreated": 0,
+            "statusCounts": {},
+            "conversions": {},
+            "dropOffs": {},
+            "timeMetrics": {},
+        }
+
+    leads_created_stmt = (
+        select(func.count(Lead.id))
+        .where(Lead.id.in_(lead_ids_in_period))
+    )
+    leads_created_result = await db.execute(leads_created_stmt)
     leads_created = leads_created_result.scalar() or 0
 
     history_stmt = (
-        select(LeadStatusHistory.to_status, func.count(LeadStatusHistory.id))
-        .where(LeadStatusHistory.lead_id.in_(lead_ids))
+        select(LeadStatusHistory.to_status, func.count(func.distinct(LeadStatusHistory.lead_id)))
+        .where(LeadStatusHistory.lead_id.in_(lead_ids_in_period))
         .where(LeadStatusHistory.changed_at >= period_start)
+        .where(LeadStatusHistory.to_status.is_not(None))
         .group_by(LeadStatusHistory.to_status)
     )
+    if end is not None:
+        history_stmt = history_stmt.where(LeadStatusHistory.changed_at <= end)
     history_result = await db.execute(history_stmt)
     status_counts = {row[0].value: row[1] for row in history_result.all()}
 
@@ -72,7 +95,7 @@ async def calculate_funnel_kpis(
     conversions = {
         "contactRate": _safe_rate(
             count_status(LeadStatus.CONTACT_ESTABLISHED),
-            count_status(LeadStatus.NEW_COLD),
+            leads_created,
         ),
         "firstApptRate": _safe_rate(
             count_status(LeadStatus.FIRST_APPT_SCHEDULED),
@@ -97,11 +120,13 @@ async def calculate_funnel_kpis(
     }
 
     reason_stmt = (
-        select(LeadStatusHistory.reason, func.count(LeadStatusHistory.id))
-        .where(LeadStatusHistory.lead_id.in_(lead_ids))
+        select(LeadStatusHistory.reason, func.count(func.distinct(LeadStatusHistory.lead_id)))
+        .where(LeadStatusHistory.lead_id.in_(lead_ids_in_period))
         .where(LeadStatusHistory.changed_at >= period_start)
         .group_by(LeadStatusHistory.reason)
     )
+    if end is not None:
+        reason_stmt = reason_stmt.where(LeadStatusHistory.changed_at <= end)
     reason_result = await db.execute(reason_stmt)
     reason_counts = {row[0]: row[1] for row in reason_result.all() if row[0]}
 
@@ -138,8 +163,9 @@ async def calculate_funnel_kpis(
 
     time_metrics = await calculate_time_metrics(
         db,
-        lead_ids=lead_ids,
+        lead_ids=lead_ids_in_period,
         period_start=period_start,
+        period_end=end,
     )
 
     return {
@@ -156,11 +182,14 @@ async def calculate_time_metrics(
     *,
     lead_ids: list[int],
     period_start: datetime,
+    period_end: Optional[datetime] = None,
 ) -> dict:
     if not lead_ids:
         return {}
 
     lead_stmt = select(Lead).where(Lead.id.in_(lead_ids)).where(Lead.created_at >= period_start)
+    if period_end is not None:
+        lead_stmt = lead_stmt.where(Lead.created_at <= period_end)
     lead_result = await db.execute(lead_stmt)
     leads = lead_result.scalars().all()
     if not leads:
@@ -169,8 +198,11 @@ async def calculate_time_metrics(
     history_stmt = (
         select(LeadStatusHistory)
         .where(LeadStatusHistory.lead_id.in_(lead_ids))
+        .where(LeadStatusHistory.changed_at >= period_start)
         .order_by(LeadStatusHistory.lead_id, LeadStatusHistory.changed_at)
     )
+    if period_end is not None:
+        history_stmt = history_stmt.where(LeadStatusHistory.changed_at <= period_end)
     history_result = await db.execute(history_stmt)
     histories = history_result.scalars().all()
 
@@ -178,7 +210,9 @@ async def calculate_time_metrics(
     for history in histories:
         history_by_lead.setdefault(history.lead_id, []).append(history)
 
-    def hours_between(start: datetime, end: datetime) -> float:
+    def hours_between(start: datetime, end: datetime) -> Optional[float]:
+        if end < start:
+            return None
         return (end - start).total_seconds() / 3600.0
 
     time_to_first_contact = []
@@ -198,37 +232,39 @@ async def calculate_time_metrics(
             status_times.setdefault(entry.to_status, entry.changed_at)
 
         if LeadStatus.CONTACT_ESTABLISHED in status_times:
-            time_to_first_contact.append(
-                hours_between(lead.created_at, status_times[LeadStatus.CONTACT_ESTABLISHED])
-            )
+            value = hours_between(lead.created_at, status_times[LeadStatus.CONTACT_ESTABLISHED])
+            if value is not None:
+                time_to_first_contact.append(value)
         if LeadStatus.FIRST_APPT_SCHEDULED in status_times:
-            time_to_first_appt.append(
-                hours_between(lead.created_at, status_times[LeadStatus.FIRST_APPT_SCHEDULED])
-            )
+            value = hours_between(lead.created_at, status_times[LeadStatus.FIRST_APPT_SCHEDULED])
+            if value is not None:
+                time_to_first_appt.append(value)
         if (
             LeadStatus.FIRST_APPT_COMPLETED in status_times
             and LeadStatus.SECOND_APPT_SCHEDULED in status_times
         ):
-            time_to_second_appt.append(
-                hours_between(
+            value = hours_between(
                     status_times[LeadStatus.FIRST_APPT_COMPLETED],
                     status_times[LeadStatus.SECOND_APPT_SCHEDULED],
                 )
-            )
+            if value is not None:
+                time_to_second_appt.append(value)
         if (
             LeadStatus.SECOND_APPT_COMPLETED in status_times
             and LeadStatus.CLOSED_WON in status_times
         ):
-            time_to_closing.append(
-                hours_between(
+            value = hours_between(
                     status_times[LeadStatus.SECOND_APPT_COMPLETED],
                     status_times[LeadStatus.CLOSED_WON],
                 )
-            )
+            if value is not None:
+                time_to_closing.append(value)
 
         for idx, entry in enumerate(lead_history[:-1]):
             next_entry = lead_history[idx + 1]
             duration = hours_between(entry.changed_at, next_entry.changed_at)
+            if duration is None:
+                continue
             key = f"avg_time_in_status_{entry.to_status.value}"
             time_in_status.setdefault(key, []).append(duration)
 

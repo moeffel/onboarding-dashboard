@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import Button from './ui/Button'
 import { CalendarEntry, LeadStatus } from '../types'
+import { formatAppointmentLabel } from '../lib/appointments'
 
 interface CalendarPanelProps {
   entries: CalendarEntry[]
@@ -71,11 +72,16 @@ export default function CalendarPanel({ entries, isEditable = false, onStatusUpd
             {grouped.get(date)?.map((entry) => (
               <div
                 key={`${entry.leadId}-${entry.scheduledFor}`}
-                className="flex items-center justify-between px-4 py-3"
+                className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div>
                   <p className="text-sm font-medium text-slate-900">{entry.title}</p>
                   <p className="text-xs text-slate-500">{entry.status.replace(/_/g, ' ')}</p>
+                  {entry.status !== 'call_scheduled' && (
+                    <p className="text-xs text-slate-500">
+                      Format: {formatAppointmentLabel(entry.location)}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-sm text-slate-700">{formatTime(entry.scheduledFor)}</div>

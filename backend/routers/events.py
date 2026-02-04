@@ -1,10 +1,11 @@
 """Events router for recording KPI-relevant activities."""
-from datetime import datetime
+from __future__ import annotations
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -22,6 +23,20 @@ from services.auth import log_audit
 from services.lead_status import apply_status_transition
 
 router = APIRouter(prefix="/events", tags=["events"])
+
+
+def _ensure_not_past(value: datetime | None, label: str) -> None:
+    if value is None:
+        return
+    candidate = value
+    if value.tzinfo is not None:
+        candidate = value.astimezone(timezone.utc).replace(tzinfo=None)
+    now = datetime.utcnow()
+    if candidate < now:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{label} darf nicht in der Vergangenheit liegen",
+        )
 
 
 async def get_accessible_lead(
@@ -47,10 +62,12 @@ async def get_accessible_lead(
 # Request/Response schemas
 class CallEventCreate(BaseModel):
     """Schema for creating a call event."""
+    model_config = ConfigDict(populate_by_name=True)
+
     contactRef: Optional[str] = Field(None, max_length=255)
     outcome: CallOutcome
     notes: Optional[str] = Field(None, max_length=1000)
-    datetime: Optional[datetime] = None
+    eventDatetime: Optional[datetime] = Field(None, alias="datetime")
     leadId: Optional[int] = None
     nextCallAt: Optional[datetime] = None
 
@@ -71,10 +88,13 @@ class CallEventResponse(BaseModel):
 
 class AppointmentEventCreate(BaseModel):
     """Schema for creating an appointment event."""
+    model_config = ConfigDict(populate_by_name=True)
+
     type: AppointmentType
     result: AppointmentResult
     notes: Optional[str] = Field(None, max_length=1000)
-    datetime: Optional[datetime] = None
+    location: Optional[str] = Field(None, max_length=255)
+    eventDatetime: Optional[datetime] = Field(None, alias="datetime")
     leadId: Optional[int] = None
 
 
@@ -86,6 +106,7 @@ class AppointmentEventResponse(BaseModel):
     datetime: datetime
     result: str
     notes: Optional[str]
+    location: Optional[str]
     leadId: Optional[int]
 
     class Config:
@@ -94,10 +115,12 @@ class AppointmentEventResponse(BaseModel):
 
 class ClosingEventCreate(BaseModel):
     """Schema for creating a closing event."""
+    model_config = ConfigDict(populate_by_name=True)
+
     units: Decimal = Field(..., ge=0)
     productCategory: Optional[str] = Field(None, max_length=100)
     notes: Optional[str] = Field(None, max_length=1000)
-    datetime: Optional[datetime] = None
+    eventDatetime: Optional[datetime] = Field(None, alias="datetime")
     leadId: Optional[int] = None
 
     @field_validator('units')
@@ -148,10 +171,12 @@ async def create_call_event(
         lead = await get_accessible_lead(db, event_data.leadId, current_user)
         lead_id = lead.id
 
+    _ensure_not_past(event_data.nextCallAt, "Rückrufdatum")
+
     event = CallEvent(
         user_id=current_user.id,
         lead_id=lead_id,
-        datetime=event_data.datetime or datetime.utcnow(),
+        datetime=event_data.eventDatetime or datetime.utcnow(),
         contact_ref=event_data.contactRef,
         outcome=event_data.outcome,
         notes=event_data.notes
@@ -253,13 +278,16 @@ async def get_recent_events(
             )
         )
     for event in appt_result.scalars():
+        meta_parts = [f"Status: {event.result.value}"]
+        if event.location:
+            meta_parts.append(event.location)
         recent.append(
             RecentEventResponse(
                 id=event.id,
                 type="appointment",
                 datetime=event.datetime,
                 title=f"Termin • {event.type.value}",
-                meta=f"Status: {event.result.value}",
+                meta=" • ".join(meta_parts),
                 notes=event.notes,
             )
         )
@@ -292,25 +320,31 @@ async def create_appointment_event(
         lead = await get_accessible_lead(db, event_data.leadId, current_user)
         lead_id = lead.id
 
-    if event_data.result == AppointmentResult.SET and event_data.datetime is None:
+    if event_data.result == AppointmentResult.SET and event_data.eventDatetime is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Datum ist für vereinbarte Termine erforderlich",
         )
+    if event_data.result == AppointmentResult.SET:
+        _ensure_not_past(event_data.eventDatetime, "Termin-Datum")
+
+    location = event_data.location or "Telefonisch"
 
     event = AppointmentEvent(
         user_id=current_user.id,
         lead_id=lead_id,
         type=event_data.type,
-        datetime=event_data.datetime or datetime.utcnow(),
+        datetime=event_data.eventDatetime or datetime.utcnow(),
         result=event_data.result,
-        notes=event_data.notes
+        notes=event_data.notes,
+        location=location,
     )
     db.add(event)
     await db.flush()
 
     if lead is not None:
         scheduled_for = event.datetime.isoformat() if event.datetime else None
+        location = event.location or None
         if event.type == AppointmentType.FIRST:
             if event.result == AppointmentResult.SET:
                 await apply_status_transition(
@@ -319,7 +353,7 @@ async def create_appointment_event(
                     LeadStatus.FIRST_APPT_SCHEDULED,
                     changed_by_user_id=current_user.id,
                     reason="first_appt_scheduled",
-                    meta={"scheduled_for": scheduled_for},
+                    meta={"scheduled_for": scheduled_for, "location": location},
                     changed_at=event.datetime,
                 )
             elif event.result == AppointmentResult.COMPLETED:
@@ -354,7 +388,7 @@ async def create_appointment_event(
                     LeadStatus.SECOND_APPT_SCHEDULED,
                     changed_by_user_id=current_user.id,
                     reason="second_appt_scheduled",
-                    meta={"scheduled_for": scheduled_for},
+                    meta={"scheduled_for": scheduled_for, "location": location},
                     changed_at=event.datetime,
                 )
             elif event.result == AppointmentResult.COMPLETED:
@@ -398,6 +432,7 @@ async def create_appointment_event(
         datetime=event.datetime,
         result=event.result.value,
         notes=event.notes,
+        location=event.location,
         leadId=event.lead_id,
     )
 
@@ -415,10 +450,13 @@ async def create_closing_event(
         lead = await get_accessible_lead(db, event_data.leadId, current_user)
         lead_id = lead.id
 
+    if event_data.eventDatetime is not None:
+        _ensure_not_past(event_data.eventDatetime, "Abschluss-Datum")
+
     event = ClosingEvent(
         user_id=current_user.id,
         lead_id=lead_id,
-        datetime=event_data.datetime or datetime.utcnow(),
+        datetime=event_data.eventDatetime or datetime.utcnow(),
         units=event_data.units,
         product_category=event_data.productCategory,
         notes=event_data.notes

@@ -40,6 +40,23 @@ PY
     else
       echo "Database exists without alembic_version; stamping head."
       (cd "$BACKEND_DIR" && "$VENV_PY" -m alembic stamp head)
+      echo "Running lightweight schema check..."
+      (cd "$BACKEND_DIR" && "$VENV_PY" - <<'PY'
+import sqlite3
+
+conn = sqlite3.connect("onboarding.db")
+cur = conn.cursor()
+cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='appointment_events'")
+if cur.fetchone():
+    cur.execute("PRAGMA table_info(appointment_events)")
+    columns = {row[1] for row in cur.fetchall()}
+    if "location" not in columns:
+        print("Adding missing column appointment_events.location")
+        cur.execute("ALTER TABLE appointment_events ADD COLUMN location VARCHAR(255)")
+        conn.commit()
+conn.close()
+PY
+)
     fi
   else
     (cd "$BACKEND_DIR" && "$VENV_PY" -m alembic upgrade head)

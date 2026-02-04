@@ -30,11 +30,11 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-transparent p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          <BarChart3 className="h-10 w-10 text-primary-600" />
+          <BarChart3 className="h-10 w-10 text-red-600" />
           <span className="text-2xl font-bold text-slate-900">Onboarding Dashboard</span>
         </div>
 
@@ -79,7 +79,7 @@ export default function Login() {
 
             <p className="mt-4 text-center text-sm text-slate-500">
               Noch kein Account?{' '}
-              <Link to="/register" className="text-primary-600 hover:text-primary-700 font-medium">
+              <Link to="/register" className="text-red-600 hover:text-red-700 font-medium">
                 Jetzt registrieren
               </Link>
             </p>

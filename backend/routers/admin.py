@@ -120,9 +120,11 @@ class AuditLogResponse(BaseModel):
     """Audit log response schema."""
     id: int
     actorUserId: Optional[int]
+    actorName: Optional[str] = None
     action: str
     objectType: Optional[str]
     objectId: Optional[int]
+    objectLabel: Optional[str] = None
     diff: Optional[str]
     createdAt: str
 
@@ -544,13 +546,55 @@ async def list_audit_logs(
     result = await db.execute(query)
     logs = result.scalars().all()
 
+    actor_ids = {log.actor_user_id for log in logs if log.actor_user_id}
+    object_ids_by_type: dict[str, set[int]] = {}
+    for log in logs:
+        if not log.object_type or not log.object_id:
+            continue
+        object_ids_by_type.setdefault(log.object_type, set()).add(log.object_id)
+
+    actor_map: dict[int, str] = {}
+    if actor_ids:
+        actor_result = await db.execute(select(User).where(User.id.in_(actor_ids)))
+        for user in actor_result.scalars():
+            actor_map[user.id] = f"{user.first_name} {user.last_name}".strip()
+
+    lead_map: dict[int, str] = {}
+    if object_ids_by_type.get("Lead"):
+        from models import Lead
+        lead_result = await db.execute(select(Lead).where(Lead.id.in_(object_ids_by_type["Lead"])))
+        for lead in lead_result.scalars():
+            lead_map[lead.id] = lead.full_name
+
+    user_map: dict[int, str] = {}
+    if object_ids_by_type.get("User"):
+        user_result = await db.execute(select(User).where(User.id.in_(object_ids_by_type["User"])))
+        for user in user_result.scalars():
+            user_map[user.id] = f"{user.first_name} {user.last_name}".strip()
+
+    team_map: dict[int, str] = {}
+    if object_ids_by_type.get("Team"):
+        team_result = await db.execute(select(Team).where(Team.id.in_(object_ids_by_type["Team"])))
+        for team in team_result.scalars():
+            team_map[team.id] = team.name
+
     return [
         AuditLogResponse(
             id=log.id,
             actorUserId=log.actor_user_id,
+            actorName=actor_map.get(log.actor_user_id),
             action=log.action.value,
             objectType=log.object_type,
             objectId=log.object_id,
+            objectLabel=(
+                lead_map.get(log.object_id)
+                if log.object_type == "Lead"
+                else user_map.get(log.object_id)
+                if log.object_type == "User"
+                else team_map.get(log.object_id)
+                if log.object_type == "Team"
+                else None
+            ),
             diff=log.diff,
             createdAt=log.created_at.isoformat()
         )

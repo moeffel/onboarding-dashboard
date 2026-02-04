@@ -49,14 +49,15 @@ def upgrade() -> None:
     ]
 
     for name, label, description, formula, warn, good in defaults:
-        op.execute(
-            sa.text(
-                """
-                INSERT INTO kpi_configs (name, label, description, formula, warn_threshold, good_threshold, visibility_roles)
-                VALUES (:name, :label, :description, :formula, :warn, :good, :visibility)
-                ON CONFLICT (name) DO NOTHING
-                """
-            ),
+        stmt = sa.text(
+            """
+            INSERT INTO kpi_configs (name, label, description, formula, warn_threshold, good_threshold, visibility_roles)
+            VALUES (:name, :label, :description, :formula, :warn, :good, :visibility)
+            ON CONFLICT (name) DO NOTHING
+            """
+        )
+        op.get_bind().execute(
+            stmt,
             {
                 "name": name,
                 "label": label,

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Routes, Route, NavLink } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { cn } from '../lib/utils'
@@ -17,6 +17,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import Select from '../components/ui/Select'
+import SortableHeader from '../components/ui/SortableHeader'
 import { useAuth } from '../hooks/useAuth'
 import type { User, Team, KPIConfigItem, AuditLogEntry, UserRole } from '../types'
 
@@ -40,16 +41,16 @@ function AdminNav() {
   ]
 
   return (
-    <nav className="flex gap-1 mb-6 bg-white rounded-lg p-1 border border-slate-200">
+    <nav className="flex gap-1 mb-6 bg-white rounded-lg p-1 border border-slate-200 overflow-x-auto flex-nowrap">
       {navItems.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}
           className={({ isActive }) =>
             cn(
-              'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors relative',
+              'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors relative shrink-0',
               isActive
-                ? 'bg-primary-100 text-primary-700'
+                ? 'bg-red-100 text-red-700'
                 : 'text-slate-600 hover:bg-slate-100'
             )
           }
@@ -77,6 +78,10 @@ function UsersManagement() {
   const [rejectReason, setRejectReason] = useState<Record<number, string>>({})
   const [showRejectForm, setShowRejectForm] = useState<Record<number, boolean>>({})
   const [userEdits, setUserEdits] = useState<Record<number, Partial<User>>>({})
+  const [userSort, setUserSort] = useState<{ key: string; direction: 'asc' | 'desc' }>({
+    key: 'name',
+    direction: 'asc',
+  })
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin', 'users'],
@@ -104,6 +109,44 @@ function UsersManagement() {
       return res.json() as Promise<Team[]>
     },
   })
+
+  const teamNameById = useMemo(() => {
+    const map: Record<number, string> = {}
+    teams?.forEach((team) => {
+      map[team.id] = team.displayName || team.name
+    })
+    return map
+  }, [teams])
+
+  const sortedUsers = useMemo(() => {
+    if (!users) return []
+    const direction = userSort.direction === 'asc' ? 1 : -1
+    return [...users].sort((a, b) => {
+      switch (userSort.key) {
+        case 'email':
+          return direction * a.email.localeCompare(b.email, 'de-AT')
+        case 'role':
+          return direction * a.role.localeCompare(b.role, 'de-AT')
+        case 'team': {
+          const aTeam = a.teamId ? teamNameById[a.teamId] || '' : ''
+          const bTeam = b.teamId ? teamNameById[b.teamId] || '' : ''
+          return direction * aTeam.localeCompare(bTeam, 'de-AT')
+        }
+        case 'status':
+          return direction * a.status.localeCompare(b.status, 'de-AT')
+        case 'name':
+        default:
+          return direction * `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`, 'de-AT')
+      }
+    })
+  }, [users, userSort, teamNameById])
+
+  const handleUserSort = (key: string) => {
+    setUserSort((prev) => ({
+      key,
+      direction: prev.key === key ? (prev.direction === 'asc' ? 'desc' : 'asc') : 'asc',
+    }))
+  }
 
   const approveMutation = useMutation({
     mutationFn: async ({
@@ -316,7 +359,7 @@ function UsersManagement() {
                         placeholder="Ablehnungsgrund eingeben..."
                         value={rejectReason[user.id] || ''}
                         onChange={(e) => setRejectReason({ ...rejectReason, [user.id]: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                         rows={2}
                       />
                       <div className="flex gap-2">
@@ -357,7 +400,7 @@ function UsersManagement() {
                             type="date"
                             value={approvalStartDate[user.id] || ''}
                             onChange={(e) => setApprovalStartDate({ ...approvalStartDate, [user.id]: e.target.value })}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                           />
                         </div>
                         <div>
@@ -367,7 +410,7 @@ function UsersManagement() {
                             placeholder="Optional..."
                             value={approvalNotes[user.id] || ''}
                             onChange={(e) => setApprovalNotes({ ...approvalNotes, [user.id]: e.target.value })}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
                           />
                         </div>
                       </div>
@@ -406,19 +449,59 @@ function UsersManagement() {
             <div className="p-6 text-center text-slate-500">Laden...</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[1000px]">
                 <thead>
-                  <tr className="border-b border-slate-200">
-                    <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">Name</th>
-                    <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">E-Mail</th>
-                    <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">Rolle</th>
-                    <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">Team</th>
-                    <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">Status</th>
+                  <tr className="border-b border-slate-200 bg-slate-50/70">
+                    <th className="text-left py-3 px-6">
+                      <SortableHeader
+                        label="Name"
+                        sortKey="name"
+                        activeKey={userSort.key}
+                        direction={userSort.direction}
+                        onSort={handleUserSort}
+                      />
+                    </th>
+                    <th className="text-left py-3 px-6">
+                      <SortableHeader
+                        label="E-Mail"
+                        sortKey="email"
+                        activeKey={userSort.key}
+                        direction={userSort.direction}
+                        onSort={handleUserSort}
+                      />
+                    </th>
+                    <th className="text-left py-3 px-6">
+                      <SortableHeader
+                        label="Rolle"
+                        sortKey="role"
+                        activeKey={userSort.key}
+                        direction={userSort.direction}
+                        onSort={handleUserSort}
+                      />
+                    </th>
+                    <th className="text-left py-3 px-6">
+                      <SortableHeader
+                        label="Team"
+                        sortKey="team"
+                        activeKey={userSort.key}
+                        direction={userSort.direction}
+                        onSort={handleUserSort}
+                      />
+                    </th>
+                    <th className="text-left py-3 px-6">
+                      <SortableHeader
+                        label="Status"
+                        sortKey="status"
+                        activeKey={userSort.key}
+                        direction={userSort.direction}
+                        onSort={handleUserSort}
+                      />
+                    </th>
                     <th className="text-right py-3 px-6 text-sm font-medium text-slate-500">Aktionen</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {users?.map((user) => (
+                  {sortedUsers.map((user) => (
                     <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="py-3 px-6 text-sm font-medium text-slate-900">
                         {user.firstName} {user.lastName}
@@ -493,6 +576,10 @@ function UsersManagement() {
 }
 
 function TeamsManagement() {
+  const [teamSort, setTeamSort] = useState<{ key: string; direction: 'asc' | 'desc' }>({
+    key: 'name',
+    direction: 'asc',
+  })
   const { data: teams, isLoading } = useQuery({
     queryKey: ['admin', 'teams'],
     queryFn: async () => {
@@ -501,6 +588,29 @@ function TeamsManagement() {
       return res.json() as Promise<Team[]>
     },
   })
+
+  const sortedTeams = useMemo(() => {
+    if (!teams) return []
+    const direction = teamSort.direction === 'asc' ? 1 : -1
+    return [...teams].sort((a, b) => {
+      switch (teamSort.key) {
+        case 'id':
+          return direction * (a.id - b.id)
+        case 'lead':
+          return direction * (a.leadFullName || '').localeCompare(b.leadFullName || '', 'de-AT')
+        case 'name':
+        default:
+          return direction * a.displayName.localeCompare(b.displayName, 'de-AT')
+      }
+    })
+  }, [teams, teamSort])
+
+  const handleTeamSort = (key: string) => {
+    setTeamSort((prev) => ({
+      key,
+      direction: prev.key === key ? (prev.direction === 'asc' ? 'desc' : 'asc') : 'asc',
+    }))
+  }
 
   return (
     <Card>
@@ -512,16 +622,40 @@ function TeamsManagement() {
           <div className="p-6 text-center text-slate-500">Laden...</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[520px]">
               <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">ID</th>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">Teamname</th>
-                  <th className="text-left py-3 px-6 text-sm font-medium text-slate-500">Teamleiter</th>
+                <tr className="border-b border-slate-200 bg-slate-50/70">
+                  <th className="text-left py-3 px-6">
+                    <SortableHeader
+                      label="ID"
+                      sortKey="id"
+                      activeKey={teamSort.key}
+                      direction={teamSort.direction}
+                      onSort={handleTeamSort}
+                    />
+                  </th>
+                  <th className="text-left py-3 px-6">
+                    <SortableHeader
+                      label="Teamname"
+                      sortKey="name"
+                      activeKey={teamSort.key}
+                      direction={teamSort.direction}
+                      onSort={handleTeamSort}
+                    />
+                  </th>
+                  <th className="text-left py-3 px-6">
+                    <SortableHeader
+                      label="Teamleiter"
+                      sortKey="lead"
+                      activeKey={teamSort.key}
+                      direction={teamSort.direction}
+                      onSort={handleTeamSort}
+                    />
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {teams?.map((team) => (
+                {sortedTeams.map((team) => (
                   <tr key={team.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-6 text-sm text-slate-600">{team.id}</td>
                     <td className="py-3 px-6 text-sm font-medium text-slate-900">{team.displayName}</td>
@@ -542,6 +676,10 @@ function TeamsManagement() {
 function KPIConfig() {
   const queryClient = useQueryClient()
   const [drafts, setDrafts] = useState<Record<string, Partial<KPIConfigItem>>>({})
+  const [configSort, setConfigSort] = useState<{ key: string; direction: 'asc' | 'desc' }>({
+    key: 'kpi',
+    direction: 'asc',
+  })
   const { data: configs, isLoading } = useQuery({
     queryKey: ['admin', 'kpi-config'],
     queryFn: async () => {
@@ -623,6 +761,35 @@ function KPIConfig() {
     mutation.mutate({ name: item.name, payload })
   }
 
+  const sortedConfigs = useMemo(() => {
+    if (!configs) return []
+    const direction = configSort.direction === 'asc' ? 1 : -1
+    return [...configs].sort((a, b) => {
+      const aDraft = drafts[a.name]
+      const bDraft = drafts[b.name]
+      const aWarn = aDraft?.warnThreshold ?? a.warnThreshold ?? 0
+      const bWarn = bDraft?.warnThreshold ?? b.warnThreshold ?? 0
+      const aGood = aDraft?.goodThreshold ?? a.goodThreshold ?? 0
+      const bGood = bDraft?.goodThreshold ?? b.goodThreshold ?? 0
+      switch (configSort.key) {
+        case 'warn':
+          return direction * ((aWarn ?? 0) - (bWarn ?? 0))
+        case 'good':
+          return direction * ((aGood ?? 0) - (bGood ?? 0))
+        case 'kpi':
+        default:
+          return direction * a.label.localeCompare(b.label, 'de-AT')
+      }
+    })
+  }, [configs, configSort, drafts])
+
+  const handleConfigSort = (key: string) => {
+    setConfigSort((prev) => ({
+      key,
+      direction: prev.key === key ? (prev.direction === 'asc' ? 'desc' : 'asc') : 'asc',
+    }))
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -633,18 +800,42 @@ function KPIConfig() {
           <div className="p-6 text-center text-slate-500">Laden...</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[900px]">
               <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">KPI</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Warnschwelle</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Grünschwelle</th>
+                <tr className="border-b border-slate-200 bg-slate-50/70">
+                  <th className="text-left py-3 px-4">
+                    <SortableHeader
+                      label="KPI"
+                      sortKey="kpi"
+                      activeKey={configSort.key}
+                      direction={configSort.direction}
+                      onSort={handleConfigSort}
+                    />
+                  </th>
+                  <th className="text-left py-3 px-4">
+                    <SortableHeader
+                      label="Warnschwelle"
+                      sortKey="warn"
+                      activeKey={configSort.key}
+                      direction={configSort.direction}
+                      onSort={handleConfigSort}
+                    />
+                  </th>
+                  <th className="text-left py-3 px-4">
+                    <SortableHeader
+                      label="Grünschwelle"
+                      sortKey="good"
+                      activeKey={configSort.key}
+                      direction={configSort.direction}
+                      onSort={handleConfigSort}
+                    />
+                  </th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Sichtbar für</th>
                   <th className="text-right py-3 px-4 text-sm font-medium text-slate-500">Aktion</th>
                 </tr>
               </thead>
               <tbody>
-                {configs?.map((item) => {
+                {sortedConfigs.map((item) => {
                   const draft = drafts[item.name]
                   const mergedWarn =
                     draft?.warnThreshold !== undefined ? draft.warnThreshold : item.warnThreshold
@@ -717,6 +908,10 @@ function KPIConfig() {
 }
 
 function AuditLog() {
+  const [auditSort, setAuditSort] = useState<{ key: string; direction: 'asc' | 'desc' }>({
+    key: 'time',
+    direction: 'desc',
+  })
   const { data: logs, isLoading } = useQuery({
     queryKey: ['admin', 'audit-logs'],
     queryFn: async () => {
@@ -725,6 +920,34 @@ function AuditLog() {
       return res.json() as Promise<AuditLogEntry[]>
     },
   })
+
+  const sortedLogs = useMemo(() => {
+    if (!logs) return []
+    const direction = auditSort.direction === 'asc' ? 1 : -1
+    return [...logs].sort((a, b) => {
+      switch (auditSort.key) {
+        case 'user':
+          return direction * (a.actorName || '').localeCompare(b.actorName || '', 'de-AT')
+        case 'action':
+          return direction * a.action.localeCompare(b.action, 'de-AT')
+        case 'object': {
+          const aObj = `${a.objectType || ''} ${a.objectLabel || a.objectId || ''}`.trim()
+          const bObj = `${b.objectType || ''} ${b.objectLabel || b.objectId || ''}`.trim()
+          return direction * aObj.localeCompare(bObj, 'de-AT')
+        }
+        case 'time':
+        default:
+          return direction * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+      }
+    })
+  }, [logs, auditSort])
+
+  const handleAuditSort = (key: string) => {
+    setAuditSort((prev) => ({
+      key,
+      direction: prev.key === key ? (prev.direction === 'asc' ? 'desc' : 'asc') : 'asc',
+    }))
+  }
 
   const formatDiff = (diff: string | null) => {
     if (!diff) return '—'
@@ -746,28 +969,69 @@ function AuditLog() {
           <div className="p-6 text-center text-slate-500">Laden...</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[900px]">
               <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Zeitpunkt</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">User</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Aktion</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Objekt</th>
+                <tr className="border-b border-slate-200 bg-slate-50/70">
+                  <th className="text-left py-3 px-4">
+                    <SortableHeader
+                      label="Zeitpunkt"
+                      sortKey="time"
+                      activeKey={auditSort.key}
+                      direction={auditSort.direction}
+                      onSort={handleAuditSort}
+                    />
+                  </th>
+                  <th className="text-left py-3 px-4">
+                    <SortableHeader
+                      label="User"
+                      sortKey="user"
+                      activeKey={auditSort.key}
+                      direction={auditSort.direction}
+                      onSort={handleAuditSort}
+                    />
+                  </th>
+                  <th className="text-left py-3 px-4">
+                    <SortableHeader
+                      label="Aktion"
+                      sortKey="action"
+                      activeKey={auditSort.key}
+                      direction={auditSort.direction}
+                      onSort={handleAuditSort}
+                    />
+                  </th>
+                  <th className="text-left py-3 px-4">
+                    <SortableHeader
+                      label="Objekt"
+                      sortKey="object"
+                      activeKey={auditSort.key}
+                      direction={auditSort.direction}
+                      onSort={handleAuditSort}
+                    />
+                  </th>
                   <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Details</th>
                 </tr>
               </thead>
               <tbody>
-                {logs?.map((log) => (
+                {sortedLogs.map((log) => (
                   <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-3 px-4 text-sm text-slate-600">
                       {new Date(log.createdAt).toLocaleString('de-AT')}
                     </td>
                     <td className="py-3 px-4 text-sm text-slate-600">
-                      {log.actorUserId ? `User #${log.actorUserId}` : 'System'}
+                      {log.actorName
+                        ? log.actorName
+                        : log.actorUserId
+                          ? `User #${log.actorUserId}`
+                          : 'System'}
                     </td>
                     <td className="py-3 px-4 text-sm font-medium text-slate-900 uppercase">{log.action}</td>
                     <td className="py-3 px-4 text-sm text-slate-600">
-                      {log.objectType || '—'} {log.objectId ? `#${log.objectId}` : ''}
+                      {log.objectType || '—'}{' '}
+                      {log.objectLabel
+                        ? `• ${log.objectLabel}`
+                        : log.objectId
+                          ? `#${log.objectId}`
+                          : ''}
                     </td>
                     <td className="py-3 px-4 text-xs text-slate-600">
                       <pre className="whitespace-pre-wrap break-words">{formatDiff(log.diff)}</pre>

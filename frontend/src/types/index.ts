@@ -48,6 +48,7 @@ export interface AppointmentEvent {
   result: 'set' | 'cancelled' | 'no_show' | 'completed'
   notes: string | null
   leadId?: number | null
+  location?: string | null
 }
 
 export interface ClosingEvent {
@@ -107,6 +108,7 @@ export interface CalendarEntry {
   status: LeadStatus
   ownerUserId: number
   teamId: number
+  location?: string | null
 }
 
 export interface FunnelKPIs {
@@ -117,7 +119,7 @@ export interface FunnelKPIs {
   timeMetrics: Record<string, number>
 }
 
-export type TimePeriod = 'today' | 'week' | 'month'
+export type TimePeriod = 'today' | 'week' | 'month' | 'custom'
 
 export interface KPIConfigItem {
   name: string
@@ -132,9 +134,11 @@ export interface KPIConfigItem {
 export interface AuditLogEntry {
   id: number
   actorUserId: number | null
+  actorName?: string | null
   action: string
   objectType: string | null
   objectId: number | null
+  objectLabel?: string | null
   diff: string | null
   createdAt: string
 }

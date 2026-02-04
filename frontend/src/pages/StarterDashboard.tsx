@@ -3,12 +3,15 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import KPICard from '../components/KPICard'
 import Button from '../components/ui/Button'
 import Select from '../components/ui/Select'
+import Input from '../components/ui/Input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { formatPercent, formatNumber } from '../lib/utils'
-import { TimePeriod, KPIs, KPIConfigItem } from '../types'
-import { Phone, Calendar, Target, Plus, Clock, Trash2 } from 'lucide-react'
+import { TimePeriod, KPIs, KPIConfigItem, FunnelKPIs, CalendarEntry } from '../types'
+import { Phone, Calendar, Target, Clock, Trash2 } from 'lucide-react'
 import ActivityModal from '../components/ActivityModal'
 import { useAuth } from '../hooks/useAuth'
+import JourneyKPIsPanel from '../components/JourneyKPIsPanel'
+import CalendarPanel from '../components/CalendarPanel'
 
 type RecentEvent = {
   id: number
@@ -19,11 +22,38 @@ type RecentEvent = {
   notes?: string | null
 }
 
-async function fetchKPIs(period: TimePeriod): Promise<KPIs> {
-  const response = await fetch(`/api/kpis/me?period=${period}`, {
+type DateRange = { start: string; end: string }
+
+const buildPeriodParams = (period: TimePeriod, range: DateRange) => {
+  const params = new URLSearchParams({ period })
+  if (period === 'custom') {
+    if (range.start) params.set('start', range.start)
+    if (range.end) params.set('end', range.end)
+  }
+  return params.toString()
+}
+
+async function fetchKPIs(period: TimePeriod, range: DateRange): Promise<KPIs> {
+  const response = await fetch(`/api/kpis/me?${buildPeriodParams(period, range)}`, {
     credentials: 'include',
   })
   if (!response.ok) throw new Error('KPIs konnten nicht geladen werden')
+  return response.json()
+}
+
+async function fetchJourneyKPIs(period: TimePeriod, range: DateRange): Promise<FunnelKPIs> {
+  const response = await fetch(`/api/kpis/journey?${buildPeriodParams(period, range)}`, {
+    credentials: 'include',
+  })
+  if (!response.ok) throw new Error('Journey-KPIs konnten nicht geladen werden')
+  return response.json()
+}
+
+async function fetchCalendarEntries(period: TimePeriod, range: DateRange): Promise<CalendarEntry[]> {
+  const response = await fetch(`/api/leads/calendar?${buildPeriodParams(period, range)}`, {
+    credentials: 'include',
+  })
+  if (!response.ok) throw new Error('Kalenderdaten konnten nicht geladen werden')
   return response.json()
 }
 
@@ -33,12 +63,28 @@ export default function StarterDashboard() {
   const [modalType, setModalType] = useState<'call' | 'appointment' | 'closing'>('call')
   const [feedback, setFeedback] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [customRange, setCustomRange] = useState<DateRange>({ start: '', end: '' })
   const queryClient = useQueryClient()
   const { user } = useAuth()
 
+  const isCustomReady = period !== 'custom' || (customRange.start && customRange.end)
+
   const { data: kpis, isLoading, error } = useQuery({
-    queryKey: ['kpis', 'me', period],
-    queryFn: () => fetchKPIs(period),
+    queryKey: ['kpis', 'me', period, customRange.start, customRange.end],
+    queryFn: () => fetchKPIs(period, customRange),
+    enabled: isCustomReady,
+  })
+
+  const { data: journeyKpis, isLoading: journeyLoading } = useQuery({
+    queryKey: ['kpis', 'journey', 'me', period, customRange.start, customRange.end],
+    queryFn: () => fetchJourneyKPIs(period, customRange),
+    enabled: isCustomReady,
+  })
+
+  const { data: calendarEntries, isLoading: calendarLoading } = useQuery({
+    queryKey: ['leads', 'calendar', period, customRange.start, customRange.end],
+    queryFn: () => fetchCalendarEntries(period, customRange),
+    enabled: isCustomReady,
   })
 
   const { data: recentEvents } = useQuery({
@@ -97,6 +143,7 @@ export default function StarterDashboard() {
     { value: 'today', label: 'Heute' },
     { value: 'week', label: 'Diese Woche' },
     { value: 'month', label: 'Dieser Monat' },
+    { value: 'custom', label: 'Benutzerdefiniert' },
   ]
 
   const getVariantFor = (name: string, value: number) => {
@@ -122,6 +169,7 @@ export default function StarterDashboard() {
   const handleActivitySaved = () => {
     queryClient.invalidateQueries({ queryKey: ['kpis', 'me'] })
     queryClient.invalidateQueries({ queryKey: ['events', 'recent'] })
+    queryClient.invalidateQueries({ queryKey: ['leads'] })
     setFeedback('Aktivität gespeichert')
     setTimeout(() => setFeedback(null), 3000)
   }
@@ -139,11 +187,11 @@ export default function StarterDashboard() {
   const getEventIcon = (type: RecentEvent['type']) => {
     switch (type) {
       case 'appointment':
-        return <Calendar className="h-4 w-4 text-indigo-500" />
+        return <Calendar className="h-4 w-4 text-red-600" />
       case 'closing':
         return <Target className="h-4 w-4 text-emerald-500" />
       default:
-        return <Phone className="h-4 w-4 text-sky-500" />
+        return <Phone className="h-4 w-4 text-red-600" />
     }
   }
 
@@ -165,26 +213,38 @@ export default function StarterDashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Mein Dashboard</h1>
           <p className="text-slate-500">Deine Kennzahlen im Überblick</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Select
             options={periodOptions}
             value={period}
             onChange={(e) => setPeriod(e.target.value as TimePeriod)}
-            className="w-40"
+            className="w-full sm:w-48"
           />
-          {canLogActivity && (
-            <Button onClick={() => openModal('call')}>
-              <Plus className="h-4 w-4 mr-2" />
-              Aktivität erfassen
-            </Button>
+          {period === 'custom' && (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Input
+                type="date"
+                value={customRange.start}
+                onChange={(e) => setCustomRange((prev) => ({ ...prev, start: e.target.value }))}
+                className="w-full sm:w-40"
+              />
+              <span className="text-xs text-slate-500">bis</span>
+              <Input
+                type="date"
+                value={customRange.end}
+                onChange={(e) => setCustomRange((prev) => ({ ...prev, end: e.target.value }))}
+                className="w-full sm:w-40"
+              />
+            </div>
           )}
         </div>
       </div>
+
       {feedback && (
         <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm text-green-700">
           {feedback}
@@ -199,6 +259,55 @@ export default function StarterDashboard() {
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-600">
           Historie ist schreibgeschützt. Nur Starter dürfen Aktivitäten erfassen, und nur Admins dürfen Einträge löschen.
         </div>
+      )}
+
+      {/* Quick Actions - moved to top */}
+      {canLogActivity && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Schnellerfassung</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Button
+                variant="secondary"
+                className="justify-start h-auto py-4"
+                type="button"
+                onClick={() => openModal('call')}
+              >
+                <Phone className="h-5 w-5 mr-3 text-red-600" />
+                <div className="text-left">
+                  <p className="font-medium">Anruf erfassen</p>
+                  <p className="text-xs text-slate-500">Telefonate dokumentieren</p>
+                </div>
+              </Button>
+              <Button
+                variant="secondary"
+                className="justify-start h-auto py-4"
+                type="button"
+                onClick={() => openModal('appointment')}
+              >
+                <Calendar className="h-5 w-5 mr-3 text-red-600" />
+                <div className="text-left">
+                  <p className="font-medium">Termin erfassen</p>
+                  <p className="text-xs text-slate-500">Erst- oder Zweittermin</p>
+                </div>
+              </Button>
+              <Button
+                variant="secondary"
+                className="justify-start h-auto py-4"
+                type="button"
+                onClick={() => openModal('closing')}
+              >
+                <Target className="h-5 w-5 mr-3 text-red-600" />
+                <div className="text-left">
+                  <p className="font-medium">Abschluss erfassen</p>
+                  <p className="text-xs text-slate-500">Verkauf dokumentieren</p>
+                </div>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* KPI Cards */}
@@ -291,55 +400,41 @@ export default function StarterDashboard() {
         </div>
       ) : null}
 
-
-      {/* Quick Actions */}
-      {canLogActivity && (
+      {journeyLoading ? (
         <Card>
-          <CardHeader>
-            <CardTitle>Schnellerfassung</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Button
-                variant="secondary"
-                className="justify-start h-auto py-4"
-                type="button"
-                onClick={() => openModal('call')}
-              >
-                <Phone className="h-5 w-5 mr-3 text-primary-600" />
-                <div className="text-left">
-                  <p className="font-medium">Anruf erfassen</p>
-                  <p className="text-xs text-slate-500">Telefonate dokumentieren</p>
-                </div>
-              </Button>
-              <Button
-                variant="secondary"
-                className="justify-start h-auto py-4"
-                type="button"
-                onClick={() => openModal('appointment')}
-              >
-                <Calendar className="h-5 w-5 mr-3 text-primary-600" />
-                <div className="text-left">
-                  <p className="font-medium">Termin erfassen</p>
-                  <p className="text-xs text-slate-500">Erst- oder Zweittermin</p>
-                </div>
-              </Button>
-              <Button
-                variant="secondary"
-                className="justify-start h-auto py-4"
-                type="button"
-                onClick={() => openModal('closing')}
-              >
-                <Target className="h-5 w-5 mr-3 text-primary-600" />
-                <div className="text-left">
-                  <p className="font-medium">Abschluss erfassen</p>
-                  <p className="text-xs text-slate-500">Verkauf dokumentieren</p>
-                </div>
-              </Button>
+          <CardContent className="py-6">
+            <div className="h-4 w-32 bg-slate-200 rounded mb-3 animate-pulse"></div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-32 bg-slate-100 rounded animate-pulse" />
+              ))}
             </div>
           </CardContent>
         </Card>
-      )}
+      ) : journeyKpis ? (
+        <JourneyKPIsPanel data={journeyKpis} title="Journey-KPIs (Starter)" />
+      ) : null}
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-slate-500" />
+            <CardTitle>Kalender</CardTitle>
+          </div>
+          <p className="text-xs text-slate-500">Rückrufe und Termine im gewählten Zeitraum.</p>
+        </CardHeader>
+        <CardContent>
+          {calendarLoading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-16 rounded-lg bg-slate-100 animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <CalendarPanel entries={calendarEntries || []} />
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

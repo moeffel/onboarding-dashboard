@@ -19,6 +19,7 @@ Du bist ein **UX Customer Journey Dashboard Spezialist** für die **Finanzdienst
 * Das System wächst über einen **phasenbasierten To-Do-Loop** mit **Build → Validate → Test → Grow**.
 * UI/UX-Look & Feel: **lovable.dev-inspired** (modern, polished SaaS UI).
 * **Neu:** Die Journey (Kaltakquise → Abschluss) wird **konsistent als Lead-Statusmodell** abgebildet; die UI führt über **Kundenliste + Detailmenü** (Status sichtbar & editierbar).
+* **Lernmodus:** Alle umgesetzten Änderungen werden **in einfacher Sprache für Nicht-Software-Engineers erklärt**, damit du sie nachvollziehen und lernen kannst.
 
 ---
 
@@ -648,9 +649,6 @@ Du gibst **immer** (in dieser Reihenfolge) aus:
 * **KPI-Konfiguration** — UI vorhanden, aber Formeln noch nicht dynamisch editierbar
 * **Trend-Charts** — Placeholder, noch keine Sparklines implementiert
 * **Coaching-Hinweise** — Regelbasierte Logik vorbereitet, aber noch nicht im UI
-* **Kunden Quick-Actions** (Call/Termin/Abschluss aus Kundenmenü) — noch offen
-* **Journey/Funnel-KPIs im UI** — noch nicht dargestellt
-* **Kalender-UI** — aktuell nur API vorhanden, UI optional
 
 ---
 
@@ -666,17 +664,386 @@ Du gibst **immer** (in dieser Reihenfolge) aus:
 * **Neu:** Kundenübersicht ist umgesetzt (Tabelle + Detailmenü) inkl. Suche/Filter/Sortierung und Notiz-Editing.
 * **Neu:** Call-Outcome „Termin abgelehnt“ (`declined`) vorhanden; Audit-Log schreibt Lead-Create/Status-Updates.
 * **Neu:** Dev-Startscript `scripts/dev.sh` (mit optionalem DB-Reset) vorhanden.
+* **Neu:** Kalender-Endpoint nutzt Termin-Events als Quelle für Erst-/Zweittermine; Callbacks bleiben über Status-History. (Termine sind damit konsistenter in der Kundenansicht.)
+* **Neu:** `AppointmentEvent` unterstützt `location` (Migration `008_add_appointment_location` + Dev-Script Schema-Check).
+* **Neu:** Activity-Modal wurde erweitert (Terminart, Terminformat Telefonisch/Persönlich/Online, Ortseingabe) inkl. Prefill aus vorhandenen Terminen.
+* **Neu:** Kunden-Detail zeigt „Nächster Termin“ inkl. Datum/Ort; Teamleiter-Übersicht zeigt nächste Termine inkl. Datum/Ort.
+* **Neu:** KPI-Warnungen sind als farbige Badge in den KPI-Karten sichtbar.
+* **Neu:** Tabellen sind auf- und absteigend sortierbar (Sortable-Header in Kunden-, Teamleiter- und Admin-Listen).
+* **Neu:** Admin-Dashboard besitzt eine Gesamtübersicht (aggregierte KPIs).
+* **Neu:** Kunden-Archiv-Ansicht trennt aktive Leads von Archiv (Won/Lost).
+* **Neu:** KPI-Zeiträume unterstützen benutzerdefinierte Zeiträume (Starter/Teamleiter/Admin).
+* **Neu:** Journey-KPI-Layout wurde überarbeitet (Funnel + Tempo + Drop-Offs).
+* **Neu:** Termin-Eingaben sind gegen vergangene Zeiten validiert (UI + Backend).
+* **Neu:** Kundenansicht ist nur für Starter sichtbar (Teamleiter/Admin ausgeblendet).
+* **Neu:** Journey-KPIs basieren auf Lead-Kohorten (keine Mehrfachzählung bei Termin-Änderungen).
 
 ### 16.2 Offene To-Dos
 
-| Bereich           | Task         | Beschreibung                                                     |
-| ----------------- | ------------ | ---------------------------------------------------------------- |
-| **Frontend**      | Kunden-Actions | Schnellaktionen (Anruf/Termin/Abschluss) im Kundenmenü          |
-| **Frontend**      | Kalender-UI  | Kalenderansicht für Rückrufe & Termine (optional)               |
-| **Frontend**      | Journey-KPIs | Funnel/Drop-Off/Time-KPIs im UI anzeigen                         |
-| **Tests**         | Regression   | Sicherstellen: bestehende KPIs/Events weiterhin korrekt          |
-| **Dokumentation** | Screenshots  | Screenshots/Checklist ergänzen (optional vor finalem Go-Live)    |
+| Bereich           | Task               | Beschreibung                                                                 |
+| ----------------- | ------------------ | --------------------------------------------------------------------------- |
+| **Dokumentation** | Screenshots        | Screenshots/Checklist ergänzen (optional vor finalem Go-Live)                |
 
 ---
 
-Wenn du willst, kann ich die **nächsten TODOs** (Kunden-Quick-Actions, Kalender-UI, Journey-KPIs, Tests) „atomic“ in eine **Implementation-Checklist** zerlegen, exakt im Build→Validate→Test Loop-Format.
+Wenn du willst, kann ich die **nächsten Tasks** (z. B. Screenshots/Go-Live-Checklist) „atomic“ in eine **Implementation-Checklist** zerlegen, exakt im Build→Validate→Test Loop-Format.
+
+## 17) UX Journey Spezifikation (eingebettet aus UX_JOURNEY.md)
+
+**Journey: Telefonie → Termin(e) → Abschluss (Units) → Archiv**
+
+*(kompatibel mit der Spezifikations-Logik aus MARKDOWN.md: Lead/Opportunity, Status Board (Kanban), Kalender, Messbarkeit für Starter/Teamleiter/Admin)*
+
+---
+
+### 1) Ziel der UX Journey
+
+Diese Spezifikation beschreibt die **User Journey** vom **Telefonat** bis zum **Abschluss** (inkl. Units) – inkl. aller relevanten Statuswechsel, UI-Interaktionen, Pflichtfelder und Messgrößen.
+
+**Kernprinzip:**
+Jeder Kunde/Prospect wird als **Lead/Opportunity (Kanban-Card)** geführt. Jede Aktion (Call/Termin/Abschluss) ist **manuell** erfassbar, **validiert**, **statusgeführt** und **messbar**.
+
+---
+
+### 2) Rollen & Sichtbarkeit (Wer sieht was?)
+
+**Starter**
+
+* darf Leads anlegen/führen (eigene Leads)
+* sieht eigene Quoten, eigenes Status Board, eigenen Kalender
+* darf Statuswechsel nur im erlaubten Rahmen auslösen
+
+**Teamleiter**
+
+* sieht alle Leads im Team (Status Board + Kalender + Quoten)
+* sieht Drop-offs (Ablehnung/No-show/Verschoben) und Coaching-Hebel
+* kann optional Korrekturen/Coaching-Notizen (wenn erlaubt) durchführen
+
+**Admin**
+
+* sieht alles (alle Teams)
+* sieht Audit/Status-History
+* kann Mapping/Migration & KPI-Config administrieren
+
+---
+
+### 3) Daten- und UI-Grundmodell
+
+#### 3.1 Lead/Opportunity (Kanban-Card)
+
+**Pflichtfelder beim ersten Telefonat (Lead neu):**
+
+* **Name** (Pflicht)
+* **Telefonnummer** (Pflicht)
+* **E-Mail** (optional)
+
+**Lead-Card zeigt immer:**
+
+* Name, Telefon, optional Email
+* **aktueller Status**
+* **Nächster Schritt** (UX Hinweis)
+* nächste geplante Aktivität (z. B. Callback-Datum oder Termin-Datum)
+
+#### 3.2 Aktivitäten (Events)
+
+* **CallEvent**: outcome (angenommen / nicht erreicht / abgelehnt / callback)
+* **AppointmentEvent**: Ersttermin oder Zweittermin, Status (vereinbart/verschoben/no-show/abgelehnt/durchgeführt), Datum
+* **ClosingEvent**: Abschluss mit **Units** (Pflicht)
+* **LeadStatusHistory**: jeder Statuswechsel wird protokolliert (Messbarkeit & Audit)
+
+---
+
+### 4) Statusmodell (Kanban “Status Board”)
+
+#### 4.1 Status-Spalten (Default)
+
+1. **Neu / Kaltakquise**
+2. **Anruf geplant**
+3. **Kontakt hergestellt**
+4. **Ersttermin in Klärung**
+5. **Ersttermin vereinbart**
+6. **Ersttermin durchgeführt**
+7. **Zweittermin vereinbart**
+8. **Zweittermin durchgeführt**
+9. **Abschluss (Won)**
+10. **Verloren (Lost)**
+11. **Archiv (Won/Lost)** *(separate Ansicht/Filter; Standard: nicht im aktiven Board)*
+
+> Hinweis: „Archiv“ ist kein Muss als Spalte im aktiven Kanban, kann als **separater Tab** oder Filter („Archived“) umgesetzt werden.
+
+---
+
+### 5) UX Journey — Erfolgsstory als Flow (Telefonie → Termin → Abschluss)
+
+#### 5.1 Start: Telefonat dokumentieren
+
+**UI Entry-Point:**
+
+* Button: **„Aktivität erfassen“** (Modal)
+* Schnellkacheln: „Anruf erfassen“, „Termin erfassen“, „Abschluss erfassen“ (optional)
+
+**Modal: Tab „Anruf“**
+
+1. **Lead wählen oder neu anlegen**
+
+   * Dropdown: „Bestehenden Lead wählen“
+   * Alternative: „Neuen Lead anlegen“ → zeigt Pflichtfelder: Name, Telefon, optional Email
+
+2. **Ergebnis (Dropdown)**
+
+* **Angenommen**
+* **Nicht erreicht**
+* **Abgelehnt**
+* **Erneuter Anruf (Datum Pflicht)**
+
+**Statuswirkung:**
+
+* Wenn **Angenommen** → Status: **Kontakt hergestellt**
+  → UX zeigt „Nächster Schritt: Ersttermin vereinbaren“ (Inline CTA)
+* Wenn **Nicht erreicht** → optional CTA „Callback planen“ (Datum Pflicht) → Status: **Anruf geplant**
+* Wenn **Abgelehnt** → Status: **Verloren (Lost)** → optional: Grund/Notiz
+* Wenn **Erneuter Anruf (Datum)** → Status: **Anruf geplant** + **Kalender-Eintrag**
+
+**Messung (immer):**
+
+* CallEvent schreiben
+* StatusHistory schreiben (wenn Status wechselt)
+
+---
+
+#### 5.2 Ersttermin: Vereinbaren oder kein Termin möglich
+
+**Trigger:** nur möglich, wenn Status mindestens **Kontakt hergestellt**
+
+**Option A: Ersttermin wird möglich**
+
+* Aktion: „Ersttermin vereinbaren“
+* Pflicht: **Datum/Uhrzeit**
+* Ergebnis: AppointmentEvent(first, scheduled, date)
+* Status: **Ersttermin vereinbart**
+* UX: Termin-Datum erscheint sofort
+
+  * in **Lead-Karte** (Status Board)
+  * in **Kunden-/Lead-Detailseite**
+  * im **Kalender** unter Status Board
+
+**Option B: Kein Termin möglich**
+
+* Dropdown im Ersttermin-Schritt:
+
+  * **Abgelehnt** → Status **Verloren (Lost)**
+  * **Erneuter Anruf (Datum Pflicht)** → Status **Anruf geplant** + Kalender
+  * *(optional, falls gewünscht)* „Später entscheiden“ → Status **Ersttermin in Klärung**
+
+---
+
+#### 5.3 Terminverwaltung: „steht an“, „nicht erledigt“, „erledigt“
+
+Sobald ein Termin existiert, muss er in der UX überall erkennbar sein:
+
+**UI Stellen, wo Termin sichtbar sein MUSS:**
+
+* Lead Card im Status Board: „Termin: 12.03. 14:00“
+* Kalender-Eintrag (unter Status Board)
+* Kunden-/Lead-Detail: Status + Datum + Buttons für Update
+
+**Termin-Status-Aktionen (Dropdown)**
+Für Ersttermin **und** Zweittermin identisch:
+
+* **Vereinbart** *(Datum Pflicht; initial)*
+* **Verschoben** *(neues Datum Pflicht)*
+* **No-show**
+* **Abgelehnt**
+* **Durchgeführt**
+
+**UX Begrifflichkeiten (einheitlich):**
+
+* „steht an“ = `scheduled` (vereinbart)
+* „nicht erledigt“ kann als Zustand über `scheduled/rescheduled/no_show` abgebildet werden (Termin ist nicht completed)
+* „erledigt“ = `completed` (durchgeführt)
+
+---
+
+#### 5.4 Nach Ersttermin „Durchgeführt“: Zweittermin oder Verlust
+
+**Trigger:** Ersttermin `completed`
+
+Dann MUSS als nächste Stufe angeboten werden:
+
+**Option 1: Zweittermin vereinbaren**
+
+* AppointmentEvent(second, scheduled, date)
+* Status: **Zweittermin vereinbart**
+* Kalender-Eintrag + Sichtbarkeit wie oben
+
+**Option 2: Kein Zweittermin / Abbruch**
+
+* **Abgelehnt** → Status **Verloren (Lost)**
+* **Erneuter Anruf (Datum)** → Status **Anruf geplant** + Kalender
+
+---
+
+#### 5.5 Nach Zweittermin „Durchgeführt“: Abschluss
+
+**Trigger:** Zweittermin `completed`
+
+**Abschluss dokumentieren (Modal Tab „Abschluss“)**
+
+* Pflichtfeld: **Units/Einheiten**
+* optional: Produktkategorie, Notiz
+* Ergebnis: ClosingEvent + Status: **Abschluss (Won)**
+
+**Wichtig: Abschluss → Archivierung**
+
+* Nach erfolgreichem Abschluss wird der Lead **archiviert**:
+
+  * Status: **Archiv (Won)**
+  * Lead verschwindet aus aktivem Board (Standard)
+  * bleibt sichtbar über Filter/Tab „Archiv“
+* Der Abschluss erscheint in der oberen KPI-Sektion **„Abschlüsse“**
+
+  * **Closings**
+  * **Units gesamt**
+  * **Ø Units pro Abschluss**
+
+---
+
+### 6) Status- und Übergangsregeln (Gates)
+
+Diese Regeln sind zwingend (UI + Backend müssen sie erzwingen):
+
+1. **Zweittermin darf erst möglich sein**, wenn Ersttermin `completed`
+2. **Abschluss darf erst möglich sein**, wenn Zweittermin `completed`
+3. **Datum Pflicht**, wenn:
+
+   * Termin „Vereinbart“
+   * Termin „Verschoben“
+   * „Erneuter Anruf“
+4. **Lead-Neuanlage beim Call** benötigt Name + Telefon
+5. **Archivierung** erfolgt automatisch bei:
+
+   * Abschluss (Won) → Archiv (Won)
+   * Verloren (Lost) → Archiv (Lost) *(optional: nach X Tagen automatisch oder sofort)*
+
+---
+
+### 7) “Status Board” unter Dashboard (Kanban)
+
+#### 7.1 Anforderungen
+
+* Board zeigt **aktive Leads** (nicht archiviert) standardmäßig
+* Spalten = Status (siehe Abschnitt 4.1)
+* Karte zeigt:
+
+  * Name, Telefon
+  * Status
+  * Nächster Schritt
+  * nächstes Datum (Callback/Termin)
+
+#### 7.2 Interaktionen
+
+* **Click auf Karte** → Lead-Detail (mit Historie & Aktionen)
+* **Drag & Drop** *(optional)*:
+
+  * löst Statuswechsel aus
+  * Backend prüft Gate-Regeln
+  * schreibt StatusHistory
+
+> Empfehlung: Drag&Drop erst nach stabiler Gate-Implementierung aktivieren, um falsche Statussprünge zu verhindern.
+
+---
+
+### 8) Kalender unter dem Status Board
+
+#### 8.1 Einträge
+
+* Callbacks (Erneuter Anruf)
+* Ersttermine
+* Zweittermine
+
+#### 8.2 Interaktionen
+
+* Klick auf Eintrag → öffnet „Update“-Modal:
+
+  * Verschieben (Datum)
+  * No-show
+  * Abgelehnt
+  * Durchgeführt
+
+**Wichtig:** Jede Änderung schreibt AppointmentEvent/CallbackEvent + StatusHistory (je nach Statuswirkung).
+
+---
+
+### 9) Messbarkeit / KPIs für Starter, Teamleiter, Admin
+
+#### 9.1 Funnel-KPIs (Quoten)
+
+* Kontaktquote: Kontakt hergestellt / Neu
+* Erstterminquote: Ersttermin vereinbart / Kontakt hergestellt
+* Show-Rate Ersttermin: Ersttermin durchgeführt / Ersttermin vereinbart
+* Zweitterminquote: Zweittermin vereinbart / Ersttermin durchgeführt
+* Show-Rate Zweittermin: Zweittermin durchgeführt / Zweittermin vereinbart
+* Abschlussquote: Abschluss (Won) / Zweittermin durchgeführt
+
+#### 9.2 Drop-Off-KPIs
+
+* Ablehnung am Call
+* Ablehnung Ersttermin
+* Ablehnung Zweittermin
+* No-show Ersttermin / Zweittermin
+* Verschiebungsquote Ersttermin / Zweittermin
+
+#### 9.3 Abschluss-KPIs (Units)
+
+* Closings
+* Units gesamt
+* Ø Units pro Abschluss
+
+#### 9.4 Zeit-KPIs
+
+* Ø Zeit bis Erstkontakt
+* Ø Zeit bis Ersttermin
+* Ø Zeit bis Zweittermin
+* Ø Zeit bis Abschluss
+* Ø Zeit pro Status (Time-in-Stage)
+
+---
+
+### 10) UX Copy / Konsistenz-Regeln
+
+* Dropdown-Begriffe sind **identisch** zu Status-/Event-Enums (Single Source of Truth)
+* UI zeigt immer:
+
+  * **Status:** „Kontakt hergestellt“
+  * **Nächster Schritt:** „Ersttermin vereinbaren“
+* Keine versteckten Zustände: jede Option muss **messbar** sein (Event + History)
+
+---
+
+### 11) Definition of Done (für die Journey-Implementierung)
+
+Ein Journey-Feature gilt als fertig, wenn:
+
+* UI-Flow komplett nutzbar ist (Call → Termin → Termin-Status → Abschluss → Archiv)
+* alle Gates enforced (Backend + UI)
+* Kalender + Board konsistent sind (gleiche Datenbasis)
+* KPIs/Quoten korrekt für Starter/Teamleiter/Admin auswertbar sind
+* StatusHistory vollständig ist (keine „stummen“ Statuswechsel)
+* Tests vorhanden (mind. 1 pro Gate + 1 pro Hauptpfad)
+
+---
+
+### 12) Atomic TODOs (Kurzliste)
+
+1. [x] Lead-Modell + Pflichtfelder (Name/Telefon) überall erzwingen
+2. [x] StatusHistory bei jedem Wechsel verpflichtend
+3. [x] Aktivitäts-Modal: „Lead wählen/neu“ + „Status/Nächster Schritt“ anzeigen
+4. [x] Ersttermin-Flow inkl. Datumspflichten + Speicherung + Sichtbarkeit im Lead
+5. [x] Termin-Update-Flow (verschieben/no-show/abgelehnt/durchgeführt)
+6. [x] Gate-Regeln (First→Second→Closing) serverseitig
+7. [x] Abschluss-Flow: Units Pflicht + KPI-Update
+8. [x] Archivierung (Won/Lost) + Archiv-Ansicht/Filter
+9. [x] Status Board unter Dashboard
+10. [x] Kalender unter Status Board
+11. [x] Funnel/Drop-off/Zeit-KPIs + Rollensichten
+12. [x] Regression-Tests (bestehende Events/KPIs bleiben korrekt)

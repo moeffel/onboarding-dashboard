@@ -20,21 +20,43 @@ export default function KPICard({
   variant = 'default'
 }: KPICardProps) {
   const variantStyles = {
-    default: 'border-l-slate-400',
-    success: 'border-l-green-500',
-    warning: 'border-l-yellow-500',
-    danger: 'border-l-red-500',
+    default: 'bg-slate-200',
+    success: 'bg-emerald-500',
+    warning: 'bg-amber-500',
+    danger: 'bg-rose-500',
   }
 
   const TrendIcon = trend && trend > 0 ? TrendingUp : trend && trend < 0 ? TrendingDown : Minus
   const trendColor = trend && trend > 0 ? 'text-green-600' : trend && trend < 0 ? 'text-red-600' : 'text-slate-500'
+  const variantLabel =
+    variant === 'success' ? 'Gut' : variant === 'warning' ? 'Warnung' : variant === 'danger' ? 'Kritisch' : null
+  const variantBadgeStyles: Record<'success' | 'warning' | 'danger', string> = {
+    success: 'bg-green-100 text-green-700',
+    warning: 'bg-yellow-100 text-yellow-700',
+    danger: 'bg-red-100 text-red-700',
+  }
 
   return (
-    <Card className={cn('border-l-4', variantStyles[variant])}>
+    <Card className="relative overflow-hidden">
+      <div className={cn('h-1 w-full', variantStyles[variant])} />
       <CardContent className="py-5">
-        <p className="text-sm font-medium text-slate-500">{title}</p>
-        <div className="mt-2 flex items-baseline gap-2">
-          <p className="text-2xl font-bold text-slate-900">{value}</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+            {title}
+          </p>
+          {variantLabel && (
+            <span
+              className={cn(
+                'rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide',
+                variantBadgeStyles[variant as 'success' | 'warning' | 'danger']
+              )}
+            >
+              {variantLabel}
+            </span>
+          )}
+        </div>
+        <div className="mt-3 flex items-baseline gap-2">
+          <p className="text-2xl font-semibold text-slate-900">{value}</p>
           {trend !== undefined && (
             <span className={cn('flex items-center text-sm font-medium', trendColor)}>
               <TrendIcon className="h-4 w-4 mr-0.5" />

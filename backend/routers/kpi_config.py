@@ -148,6 +148,12 @@ async def _ensure_defaults(db: AsyncSession) -> None:
         await db.flush()
 
 
+def _resolve_visibility(visibility: list[str] | None) -> list[str]:
+    if visibility is None:
+        return ["starter", "teamleiter", "admin"]
+    return visibility
+
+
 def _to_response(model: KPIConfig) -> KPIConfigResponse:
     return KPIConfigResponse(
         name=model.name,
@@ -156,7 +162,7 @@ def _to_response(model: KPIConfig) -> KPIConfigResponse:
         formula=model.formula,
         warnThreshold=model.warn_threshold,
         goodThreshold=model.good_threshold,
-        visibility=model.visibility_roles or [],
+        visibility=_resolve_visibility(model.visibility_roles),
     )
 
 
@@ -172,7 +178,7 @@ async def list_kpi_config(
     visible = [
         cfg
         for cfg in configs
-        if current_user.role.value in (cfg.visibility_roles or [])
+        if current_user.role.value in _resolve_visibility(cfg.visibility_roles)
     ]
     return [_to_response(cfg) for cfg in visible]
 
