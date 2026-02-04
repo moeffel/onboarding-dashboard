@@ -104,6 +104,7 @@ function ActivityModal({
   const [activityType, setActivityType] = useState<ActivityType>(initialType)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [closingCongrats, setClosingCongrats] = useState<string | null>(null)
   const [leads, setLeads] = useState<Lead[]>([])
   const [calendarEntries, setCalendarEntries] = useState<CalendarEntry[]>([])
   const [selectedLeadId, setSelectedLeadId] = useState<string>('')
@@ -161,6 +162,7 @@ function ActivityModal({
     if (isOpen) {
       setActivityType(initialType)
       setError(null)
+      setClosingCongrats(null)
       setCallData({
         contactRef: '',
         outcome: 'answered_appt',
@@ -194,21 +196,27 @@ function ActivityModal({
     !(activityType === 'closing' || (activityType === 'appointment' && appointmentData.type === 'second'))
 
   const filteredLeads = useMemo(() => {
+    const selected = selectedLeadId
+      ? leads.find((lead) => String(lead.id) === selectedLeadId)
+      : null
     if (activityType === 'appointment') {
       if (appointmentData.type === 'second') {
-        return leads.filter((lead) =>
+        const base = leads.filter((lead) =>
           ['first_appt_completed', 'second_appt_scheduled'].includes(lead.currentStatus)
         )
+        return selected && !base.some((lead) => lead.id === selected.id) ? [...base, selected] : base
       }
-      return leads.filter((lead) =>
+      const base = leads.filter((lead) =>
         ['contact_established', 'first_appt_pending', 'first_appt_scheduled'].includes(lead.currentStatus)
       )
+      return selected && !base.some((lead) => lead.id === selected.id) ? [...base, selected] : base
     }
     if (activityType === 'closing') {
-      return leads.filter((lead) => lead.currentStatus === 'second_appt_completed')
+      const base = leads.filter((lead) => lead.currentStatus === 'second_appt_completed')
+      return selected && !base.some((lead) => lead.id === selected.id) ? [...base, selected] : base
     }
     return leads
-  }, [activityType, appointmentData.type, leads])
+  }, [activityType, appointmentData.type, leads, selectedLeadId])
 
   useEffect(() => {
     if (!selectedLeadId) {
@@ -553,10 +561,37 @@ function ActivityModal({
         throw new Error(message)
       }
 
-      if (activityType === 'appointment' && appointmentData.type === 'second' && appointmentData.result === 'completed') {
+      if (activityType === 'appointment') {
+        if (appointmentData.type === 'second' && appointmentData.result === 'completed') {
+          onSuccess()
+          setActivityType('closing')
+          setClosingData({ units: '', result: 'won', productCategory: '', notes: '' })
+          if (leadId) setSelectedLeadId(String(leadId))
+          return
+        }
+        if (appointmentData.type === 'first' && appointmentData.result === 'completed') {
+          onSuccess()
+          setActivityType('appointment')
+          setAppointmentData({
+            type: 'second',
+            result: 'set',
+            notes: '',
+            datetime: '',
+            mode: 'in_person',
+            location: '',
+          })
+          return
+        }
+      }
+
+      if (activityType === 'closing' && closingData.result === 'won' && Number(closingData.units || 0) > 0) {
+        setClosingCongrats(`Herzlichen Glückwunsch zu ${closingData.units} Einheiten!`)
         onSuccess()
-        setActivityType('closing')
-        setClosingData({ units: '', result: 'won', productCategory: '', notes: '' })
+        setTimeout(() => {
+          onClose()
+          resetForm()
+          setClosingCongrats(null)
+        }, 1500)
         return
       }
 
@@ -626,6 +661,11 @@ function ActivityModal({
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}
+          </div>
+        )}
+        {closingCongrats && (
+          <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 text-center">
+            {closingCongrats}
           </div>
         )}
 
@@ -894,13 +934,6 @@ function ActivityModal({
                   { value: 'no_sale', label: 'Kein Verkauf' },
                 ]}
               />
-              {closingData.result === 'won' && Number(closingData.units || 0) > 0 && (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-center">
-                  <p className="text-lg font-semibold text-emerald-700">
-                    Herzlichen Glückwunsch zu {closingData.units} Einheiten!
-                  </p>
-                </div>
-              )}
               <Input
                 label="Einheiten"
                 type="number"
