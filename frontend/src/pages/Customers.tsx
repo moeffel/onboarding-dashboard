@@ -712,7 +712,7 @@ export default function Customers() {
                     variant="danger"
                     className="mt-2 w-full"
                     onClick={() => handleDeleteLead(selectedLead)}
-                    isLoading={deleteLeadMutation.isLoading}
+                    isLoading={deleteLeadMutation.isPending}
                   >
                     Lead endgültig löschen
                   </Button>
