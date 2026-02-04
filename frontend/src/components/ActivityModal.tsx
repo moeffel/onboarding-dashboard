@@ -28,8 +28,8 @@ const appointmentResultOptions = [
 ]
 
 const appointmentModeOptions = [
-  { value: 'online', label: 'Online' },
   { value: 'in_person', label: 'Persönlich' },
+  { value: 'online', label: 'Online' },
 ]
 
 const statusLabels: Record<string, string> = {
@@ -124,7 +124,7 @@ function ActivityModal({
     nextCallAt: '',
     appointmentType: 'first',
     appointmentDatetime: '',
-    appointmentMode: 'online',
+    appointmentMode: 'in_person',
     appointmentLocation: '',
   })
 
@@ -140,7 +140,7 @@ function ActivityModal({
     result: 'set',
     notes: '',
     datetime: '',
-    mode: 'online',
+    mode: 'in_person',
     location: '',
   })
 
@@ -168,10 +168,10 @@ function ActivityModal({
         nextCallAt: '',
         appointmentType: 'first',
         appointmentDatetime: '',
-        appointmentMode: 'online',
+        appointmentMode: 'in_person',
         appointmentLocation: '',
       })
-      setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'online', location: '' })
+      setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'in_person', location: '' })
       setClosingData({ units: '', result: 'won', productCategory: '', notes: '' })
       setLeadData({ fullName: '', phone: '', email: '' })
       setSelectedLeadId(preSelectedLeadId ? String(preSelectedLeadId) : '')
@@ -196,9 +196,13 @@ function ActivityModal({
   const filteredLeads = useMemo(() => {
     if (activityType === 'appointment') {
       if (appointmentData.type === 'second') {
-        return leads.filter((lead) => lead.currentStatus === 'second_appt_scheduled')
+        return leads.filter((lead) =>
+          ['first_appt_completed', 'second_appt_scheduled'].includes(lead.currentStatus)
+        )
       }
-      return leads.filter((lead) => lead.currentStatus === 'first_appt_scheduled')
+      return leads.filter((lead) =>
+        ['contact_established', 'first_appt_pending', 'first_appt_scheduled'].includes(lead.currentStatus)
+      )
     }
     if (activityType === 'closing') {
       return leads.filter((lead) => lead.currentStatus === 'second_appt_completed')
@@ -574,10 +578,10 @@ function ActivityModal({
       nextCallAt: '',
       appointmentType: 'first',
       appointmentDatetime: '',
-      appointmentMode: 'online',
+      appointmentMode: 'in_person',
       appointmentLocation: '',
     })
-    setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'online', location: '' })
+    setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'in_person', location: '' })
     setClosingData({ units: '', result: 'won', productCategory: '', notes: '' })
     setLeadData({ fullName: '', phone: '', email: '' })
     setSelectedLeadId('')
