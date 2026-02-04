@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Annotated, List
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -156,10 +157,29 @@ async def _ensure_defaults(db: AsyncSession) -> None:
         db.add_all(to_insert)
         await db.flush()
 
+    journey = await db.execute(
+        select(KPIConfig).where(KPIConfig.name == "journey_kpis_panel")
+    )
+    journey_cfg = journey.scalar_one_or_none()
+    if journey_cfg:
+        resolved = _resolve_visibility(journey_cfg.visibility_roles)
+        if resolved != journey_cfg.visibility_roles:
+            journey_cfg.visibility_roles = resolved
+
 
 def _resolve_visibility(visibility: list[str] | None) -> list[str]:
     if visibility is None:
-        return ["starter", "teamleiter", "admin"]
+        return []
+    if isinstance(visibility, str):
+        try:
+            parsed = json.loads(visibility)
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            return []
+        return []
+    if not isinstance(visibility, list):
+        return []
     return visibility
 
 
@@ -242,7 +262,7 @@ async def update_kpi_config(
         config.good_threshold = None
     if payload.visibility is not None:
         new_visibility = [role.value for role in payload.visibility]
-        if new_visibility != (config.visibility_roles or []):
+        if config.visibility_roles is None or new_visibility != config.visibility_roles:
             changes["visibility"] = {
                 "old": config.visibility_roles,
                 "new": new_visibility,
