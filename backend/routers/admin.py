@@ -305,6 +305,18 @@ async def approve_user(
     user.approved_by_id = current_user.id
     user.approved_at = now
 
+    if final_role == UserRole.TEAMLEITER:
+        existing_team = await db.execute(
+            select(Team).where(Team.lead_user_id == user.id)
+        )
+        if existing_team.scalar_one_or_none() is None:
+            db.add(
+                Team(
+                    name=f"Team {user.first_name} {user.last_name}",
+                    lead_user_id=user.id,
+                )
+            )
+
     await log_audit(
         db,
         action=AuditAction.UPDATE,
@@ -451,6 +463,18 @@ async def update_user(
             object_id=user.id,
             diff=changes
         )
+
+    if user.role == UserRole.TEAMLEITER:
+        existing_team = await db.execute(
+            select(Team).where(Team.lead_user_id == user.id)
+        )
+        if existing_team.scalar_one_or_none() is None:
+            db.add(
+                Team(
+                    name=f"Team {user.first_name} {user.last_name}",
+                    lead_user_id=user.id,
+                )
+            )
 
     return user_to_response(user)
 
