@@ -1,5 +1,7 @@
 """Application configuration using pydantic-settings."""
+import os
 from functools import lru_cache
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -40,6 +42,11 @@ class Settings(BaseSettings):
 
     # Data retention
     data_retention_days: int = 365 * 2  # 2 years default
+
+    def model_post_init(self, __context) -> None:
+        """Prefer persistent storage on Hugging Face Spaces if available."""
+        if "DATABASE_URL" not in os.environ and Path("/data").exists():
+            self.database_url = "sqlite+aiosqlite:////data/onboarding.db"
 
 
 @lru_cache

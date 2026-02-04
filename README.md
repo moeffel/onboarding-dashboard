@@ -1,3 +1,9 @@
+---
+title: Onboarding Dashboard
+sdk: docker
+app_port: 7860
+---
+
 # Onboarding Dashboard
 
 Ein Onboarding-Dashboard für neue Mitarbeiter mit FastAPI Backend und React Frontend.
@@ -50,6 +56,16 @@ npm run dev
 ```bash
 docker compose -f docker-compose.prod.yml up -d
 ```
+
+## Hugging Face Spaces (Docker)
+
+Dieses Repo kann direkt als Docker Space deployed werden. Nach dem Push:
+
+1. In den Space Settings **Persistent Storage** aktivieren (falls verfügbar).
+2. Optionales Environment Variable setzen:
+   - `DATABASE_URL=sqlite+aiosqlite:////data/onboarding.db`
+
+Die App lauscht auf Port `7860` und serviert Frontend + API aus einem Container.
 
 ## Lizenz
 

@@ -1,8 +1,10 @@
 """FastAPI application entry point."""
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -73,10 +75,13 @@ async def health_check():
     return {"status": "healthy", "version": "0.1.0"}
 
 
-# Include routers
-app.include_router(auth.router)
-app.include_router(events.router)
-app.include_router(kpis.router)
-app.include_router(admin.router)
-app.include_router(kpi_config.router)
-app.include_router(leads.router)
+# Include routers (with and without /api prefix for compatibility)
+api_routers = [auth.router, events.router, kpis.router, admin.router, kpi_config.router, leads.router]
+for router in api_routers:
+    app.include_router(router, prefix="/api")
+    app.include_router(router)
+
+# Serve built frontend if present (for single-host deployments)
+static_dir = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if static_dir.exists():
+    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
