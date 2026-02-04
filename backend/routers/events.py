@@ -14,6 +14,7 @@ from models import (
     CallEvent, CallOutcome,
     AppointmentEvent, AppointmentType, AppointmentResult,
     ClosingEvent,
+    ClosingResult,
     Lead,
     LeadStatus,
     AuditAction, UserRole
@@ -133,6 +134,7 @@ class ClosingEventCreate(BaseModel):
     notes: Optional[str] = Field(None, max_length=1000)
     eventDatetime: Optional[datetime] = Field(None, alias="datetime")
     leadId: Optional[int] = None
+    result: ClosingResult = ClosingResult.WON
 
     @field_validator('units')
     @classmethod
@@ -148,6 +150,7 @@ class ClosingEventResponse(BaseModel):
     userId: int
     datetime: datetime
     units: float
+    result: str
     productCategory: Optional[str]
     notes: Optional[str]
     leadId: Optional[int]
@@ -303,13 +306,18 @@ async def get_recent_events(
             )
         )
     for event in closing_result.scalars():
+        closing_title = (
+            "Abschluss • Kein Verkauf"
+            if event.result == ClosingResult.NO_SALE
+            else "Abschluss"
+        )
         recent.append(
             RecentEventResponse(
                 id=event.id,
                 type="closing",
                 datetime=event.datetime,
-                title="Abschluss",
-                meta=f"{event.units} Units" if event.units is not None else None,
+                title=closing_title,
+                meta=f"{event.units} Einheiten" if event.units is not None else None,
                 notes=event.notes,
             )
         )
@@ -480,11 +488,23 @@ async def create_closing_event(
     if event_data.eventDatetime is not None:
         _ensure_not_past(event_data.eventDatetime, "Abschluss-Datum")
 
+    if event_data.result == ClosingResult.NO_SALE and event_data.units > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bei 'Kein Verkauf' dürfen keine Einheiten erfasst werden",
+        )
+    if event_data.result == ClosingResult.WON and event_data.units <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bei 'Verkauf' müssen Einheiten > 0 sein",
+        )
+
     event = ClosingEvent(
         user_id=current_user.id,
         lead_id=lead_id,
         datetime=event_data.eventDatetime or datetime.utcnow(),
         units=event_data.units,
+        result=event_data.result,
         product_category=event_data.productCategory,
         notes=event_data.notes
     )
@@ -492,13 +512,22 @@ async def create_closing_event(
     await db.flush()
 
     if lead is not None:
-        await apply_status_transition(
-            db,
-            lead,
-            LeadStatus.CLOSED_WON,
-            changed_by_user_id=current_user.id,
-            reason="closing_documented",
-        )
+        if event_data.result == ClosingResult.WON:
+            await apply_status_transition(
+                db,
+                lead,
+                LeadStatus.CLOSED_WON,
+                changed_by_user_id=current_user.id,
+                reason="closing_documented",
+            )
+        else:
+            await apply_status_transition(
+                db,
+                lead,
+                LeadStatus.CLOSED_LOST,
+                changed_by_user_id=current_user.id,
+                reason="no_sale",
+            )
 
     # Log audit
     await log_audit(
@@ -514,6 +543,7 @@ async def create_closing_event(
         userId=event.user_id,
         datetime=event.datetime,
         units=float(event.units),
+        result=event.result.value,
         productCategory=event.product_category,
         notes=event.notes,
         leadId=event.lead_id,

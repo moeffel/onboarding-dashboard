@@ -33,6 +33,12 @@ class AppointmentResult(str, enum.Enum):
     COMPLETED = "completed"
 
 
+class ClosingResult(str, enum.Enum):
+    """Results for closing events."""
+    WON = "won"
+    NO_SALE = "no_sale"
+
+
 class CallEvent(Base):
     """Tracks call activities for KPI calculation."""
 
@@ -166,6 +172,13 @@ class ClosingEvent(Base):
         Numeric(10, 2),
         nullable=False,
         default=Decimal("0")
+    )
+
+    result: Mapped[ClosingResult] = mapped_column(
+        Enum(ClosingResult),
+        nullable=False,
+        default=ClosingResult.WON,
+        index=True
     )
 
     product_category: Mapped[str | None] = mapped_column(String(100), nullable=True)

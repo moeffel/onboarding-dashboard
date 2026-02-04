@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models import (
     CallEvent, CallOutcome,
     AppointmentEvent, AppointmentType, AppointmentResult,
-    ClosingEvent,
+    ClosingEvent, ClosingResult,
     User
 )
 
@@ -125,12 +125,20 @@ async def calculate_user_kpis(
     second_appt_rate = second_appointments_set / first_appointments_set if first_appointments_set > 0 else 0
 
     # Closings
-    closings_stmt = select(func.count(ClosingEvent.id)).where(ClosingEvent.user_id == user_id)
+    closings_stmt = (
+        select(func.count(ClosingEvent.id))
+        .where(ClosingEvent.user_id == user_id)
+        .where(ClosingEvent.result == ClosingResult.WON)
+    )
     closings_stmt = _apply_range_filter(closings_stmt, ClosingEvent.datetime, period_start, end)
     closings_result = await db.execute(closings_stmt)
     closings = closings_result.scalar() or 0
 
-    units_stmt = select(func.sum(ClosingEvent.units)).where(ClosingEvent.user_id == user_id)
+    units_stmt = (
+        select(func.sum(ClosingEvent.units))
+        .where(ClosingEvent.user_id == user_id)
+        .where(ClosingEvent.result == ClosingResult.WON)
+    )
     units_stmt = _apply_range_filter(units_stmt, ClosingEvent.datetime, period_start, end)
     units_result = await db.execute(units_stmt)
     units_total = float(units_result.scalar() or Decimal(0))

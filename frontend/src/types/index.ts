@@ -56,6 +56,7 @@ export interface ClosingEvent {
   userId: number
   datetime: string
   units: number
+  result?: 'won' | 'no_sale'
   productCategory: string | null
   notes: string | null
   leadId?: number | null

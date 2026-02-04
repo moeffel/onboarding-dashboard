@@ -146,6 +146,7 @@ function ActivityModal({
 
   const [closingData, setClosingData] = useState({
     units: '',
+    result: 'won',
     productCategory: '',
     notes: '',
   })
@@ -171,7 +172,7 @@ function ActivityModal({
         appointmentLocation: '',
       })
       setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'online', location: '' })
-      setClosingData({ units: '', productCategory: '', notes: '' })
+      setClosingData({ units: '', result: 'won', productCategory: '', notes: '' })
       setLeadData({ fullName: '', phone: '', email: '' })
       setSelectedLeadId(preSelectedLeadId ? String(preSelectedLeadId) : '')
       setCalendarEntries([])
@@ -519,7 +520,8 @@ function ActivityModal({
       } else {
         endpoint = 'closing'
         payload = {
-          units: closingData.units ? Number(closingData.units) : 0,
+          units: closingData.result === 'no_sale' ? 0 : (closingData.units ? Number(closingData.units) : 0),
+          result: closingData.result,
           productCategory: closingData.productCategory || undefined,
           notes: closingData.notes || undefined,
           leadId,
@@ -550,7 +552,7 @@ function ActivityModal({
       if (activityType === 'appointment' && appointmentData.type === 'second' && appointmentData.result === 'completed') {
         onSuccess()
         setActivityType('closing')
-        setClosingData({ units: '', productCategory: '', notes: '' })
+        setClosingData({ units: '', result: 'won', productCategory: '', notes: '' })
         return
       }
 
@@ -576,7 +578,7 @@ function ActivityModal({
       appointmentLocation: '',
     })
     setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'online', location: '' })
-    setClosingData({ units: '', productCategory: '', notes: '' })
+    setClosingData({ units: '', result: 'won', productCategory: '', notes: '' })
     setLeadData({ fullName: '', phone: '', email: '' })
     setSelectedLeadId('')
   }
@@ -872,14 +874,38 @@ function ActivityModal({
 
           {activityType === 'closing' && (
             <>
+              <Select
+                label="Ergebnis"
+                value={closingData.result}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setClosingData((prev) => ({
+                    ...prev,
+                    result: value,
+                    units: value === 'no_sale' ? '' : prev.units,
+                  }))
+                }}
+                options={[
+                  { value: 'won', label: 'Verkauf' },
+                  { value: 'no_sale', label: 'Kein Verkauf' },
+                ]}
+              />
+              {closingData.result === 'won' && Number(closingData.units || 0) > 0 && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-center">
+                  <p className="text-lg font-semibold text-emerald-700">
+                    Herzlichen Glückwunsch zu {closingData.units} Einheiten!
+                  </p>
+                </div>
+              )}
               <Input
-                label="Units"
+                label="Einheiten"
                 type="number"
                 step="0.1"
                 min="0"
                 required
                 value={closingData.units}
                 onChange={(e) => setClosingData({ ...closingData, units: e.target.value })}
+                disabled={closingData.result === 'no_sale'}
               />
               <Input
                 label="Produktkategorie (optional)"
