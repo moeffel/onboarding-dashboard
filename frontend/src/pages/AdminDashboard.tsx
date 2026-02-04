@@ -159,7 +159,7 @@ export default function AdminDashboard() {
     },
   })
 
-  const showJourneyKPIs = true
+  const showJourneyKPIs = !!kpiConfig?.some((cfg) => cfg.name === 'journey_kpis_panel')
 
   const thresholdMap = useMemo(() => {
     const map: Record<string, KPIConfigItem> = {}

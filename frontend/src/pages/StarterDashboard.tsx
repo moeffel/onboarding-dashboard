@@ -107,7 +107,7 @@ export default function StarterDashboard() {
     },
   })
 
-  const showJourneyKPIs = true
+  const showJourneyKPIs = !!kpiConfig?.some((cfg) => cfg.name === 'journey_kpis_panel')
 
 
   const thresholdMap = useMemo(() => {

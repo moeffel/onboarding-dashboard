@@ -25,7 +25,7 @@ DEFAULT_KPIS = [
         "formula": None,
         "warn_threshold": None,
         "good_threshold": None,
-        "visibility_roles": ["admin"],
+        "visibility_roles": [],
     },
     {
         "name": "calls_made",
@@ -242,8 +242,6 @@ async def update_kpi_config(
         config.good_threshold = None
     if payload.visibility is not None:
         new_visibility = [role.value for role in payload.visibility]
-        if name == "journey_kpis_panel" and "admin" not in new_visibility:
-            new_visibility.append("admin")
         if new_visibility != (config.visibility_roles or []):
             changes["visibility"] = {
                 "old": config.visibility_roles,

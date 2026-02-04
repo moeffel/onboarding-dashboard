@@ -10,7 +10,7 @@ from models import (
     CallEvent, CallOutcome,
     AppointmentEvent, AppointmentType, AppointmentResult,
     ClosingEvent, ClosingResult,
-    User
+    User, UserRole
 )
 
 
@@ -172,6 +172,7 @@ async def calculate_team_kpis(
     members_result = await db.execute(
         select(User)
         .where(User.team_id == team_id)
+        .where(User.role != UserRole.TEAMLEITER)
     )
     members = members_result.scalars().all()
 

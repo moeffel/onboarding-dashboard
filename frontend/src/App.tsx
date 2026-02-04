@@ -36,9 +36,6 @@ function DashboardEntry() {
   if (user?.role === 'admin') {
     return <AdminDashboard />
   }
-  if (user?.role === 'teamleiter') {
-    return <TeamleiterDashboard />
-  }
   return <StarterDashboard />
 }
 
@@ -52,7 +49,7 @@ function AppRoutes() {
       case 'admin':
         return '/dashboard'
       case 'teamleiter':
-        return '/team'
+        return '/dashboard'
       default:
         return '/dashboard'
     }
