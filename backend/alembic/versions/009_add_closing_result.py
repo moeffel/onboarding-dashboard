@@ -1,7 +1,7 @@
 """Add result to closing events.
 
 Revision ID: 009_add_closing_result
-Revises: 008_add_appointment_location
+Revises: 008
 Create Date: 2026-02-04
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "009_add_closing_result"
-down_revision = "008_add_appointment_location"
+down_revision = "008"
 branch_labels = None
 depends_on = None
 
