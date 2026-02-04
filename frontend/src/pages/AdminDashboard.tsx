@@ -159,6 +159,11 @@ export default function AdminDashboard() {
     },
   })
 
+  const showJourneyKPIs = useMemo(() => {
+    if (!kpiConfig) return true
+    return kpiConfig.some((cfg) => cfg.name === 'journey_kpis_panel')
+  }, [kpiConfig])
+
   const thresholdMap = useMemo(() => {
     const map: Record<string, KPIConfigItem> = {}
     kpiConfig?.forEach((cfg) => {
@@ -340,7 +345,7 @@ export default function AdminDashboard() {
               </div>
             </CardContent>
           </Card>
-        ) : journeyKpis ? (
+        ) : journeyKpis && showJourneyKPIs ? (
           <JourneyKPIsPanel data={journeyKpis} title="Journey-KPIs (Gesamt)" />
         ) : null}
 
@@ -475,9 +480,9 @@ export default function AdminDashboard() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <KPICard title="Abschlüsse" value={formatNumber(teamKpis.aggregated.closings)} />
-                <KPICard title="Units gesamt" value={formatNumber(teamKpis.aggregated.unitsTotal, 1)} />
+                <KPICard title="Einheiten gesamt" value={formatNumber(teamKpis.aggregated.unitsTotal, 1)} />
                 <KPICard
-                  title="Ø Units pro Abschluss"
+                  title="Ø Einheiten pro Abschluss"
                   value={formatNumber(teamKpis.aggregated.avgUnitsPerClosing, 2)}
                   variant={getVariantFor('avg_units_per_closing', teamKpis.aggregated.avgUnitsPerClosing)}
                 />
@@ -606,9 +611,9 @@ export default function AdminDashboard() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <KPICard title="Abschlüsse" value={formatNumber(starterKpis.closings)} />
-              <KPICard title="Units gesamt" value={formatNumber(starterKpis.unitsTotal, 1)} />
+              <KPICard title="Einheiten gesamt" value={formatNumber(starterKpis.unitsTotal, 1)} />
               <KPICard
-                title="Ø Units pro Abschluss"
+                title="Ø Einheiten pro Abschluss"
                 value={formatNumber(starterKpis.avgUnitsPerClosing, 2)}
                 variant={getVariantFor('avg_units_per_closing', starterKpis.avgUnitsPerClosing)}
               />

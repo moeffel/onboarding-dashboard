@@ -143,6 +143,11 @@ export default function TeamleiterDashboard() {
     },
   })
 
+  const showJourneyKPIs = useMemo(() => {
+    if (!kpiConfig) return user?.role === 'admin'
+    return kpiConfig.some((cfg) => cfg.name === 'journey_kpis_panel')
+  }, [kpiConfig, user?.role])
+
   const thresholdMap = useMemo(() => {
     const map: Record<string, KPIConfigItem> = {}
     kpiConfig?.forEach((cfg) => {
@@ -465,7 +470,7 @@ export default function TeamleiterDashboard() {
           />
           <KPICard title="Abschlüsse" value={formatNumber(selectedStarter.kpis.closings)} />
           <KPICard
-            title="Units"
+            title="Einheiten"
             value={formatNumber(selectedStarter.kpis.unitsTotal, 1)}
             variant={getVariantFor('units_total', selectedStarter.kpis.unitsTotal)}
           />
@@ -919,7 +924,7 @@ export default function TeamleiterDashboard() {
                 </div>
               </CardContent>
             </Card>
-          ) : journeyKpis ? (
+          ) : journeyKpis && showJourneyKPIs ? (
             <JourneyKPIsPanel data={journeyKpis} title="Journey-KPIs (Team)" />
           ) : null}
         </>

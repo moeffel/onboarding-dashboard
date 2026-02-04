@@ -107,6 +107,11 @@ export default function StarterDashboard() {
     },
   })
 
+  const showJourneyKPIs = useMemo(() => {
+    if (!kpiConfig) return user?.role === 'admin'
+    return kpiConfig.some((cfg) => cfg.name === 'journey_kpis_panel')
+  }, [kpiConfig, user?.role])
+
 
   const thresholdMap = useMemo(() => {
     const map: Record<string, KPIConfigItem> = {}
@@ -387,11 +392,11 @@ export default function StarterDashboard() {
                 value={formatNumber(kpis.closings)}
               />
               <KPICard
-                title="Units gesamt"
+                title="Einheiten gesamt"
                 value={formatNumber(kpis.unitsTotal, 1)}
               />
               <KPICard
-                title="Ø Units pro Abschluss"
+                title="Ø Einheiten pro Abschluss"
                 value={formatNumber(kpis.avgUnitsPerClosing, 2)}
                 variant={getVariantFor('avg_units_per_closing', kpis.avgUnitsPerClosing)}
               />
@@ -411,7 +416,7 @@ export default function StarterDashboard() {
             </div>
           </CardContent>
         </Card>
-      ) : journeyKpis ? (
+      ) : journeyKpis && showJourneyKPIs ? (
         <JourneyKPIsPanel data={journeyKpis} title="Journey-KPIs (Starter)" />
       ) : null}
 

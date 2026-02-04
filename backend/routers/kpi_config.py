@@ -19,6 +19,15 @@ router = APIRouter(tags=["kpi-config"])
 
 DEFAULT_KPIS = [
     {
+        "name": "journey_kpis_panel",
+        "label": "Journey-KPIs (Panel)",
+        "description": "Sichtbarkeit des Journey-KPIs-Panels",
+        "formula": None,
+        "warn_threshold": None,
+        "good_threshold": None,
+        "visibility_roles": ["admin"],
+    },
+    {
         "name": "calls_made",
         "label": "Anrufe getätigt",
         "description": "Summe der outbound Calls im Zeitraum",
@@ -84,16 +93,16 @@ DEFAULT_KPIS = [
     },
     {
         "name": "units_total",
-        "label": "Units gesamt",
-        "description": "Summe der eingereichten Units",
+        "label": "Einheiten gesamt",
+        "description": "Summe der eingereichten Einheiten",
         "formula": "SUM(units)",
         "warn_threshold": None,
         "good_threshold": None,
     },
     {
         "name": "avg_units_per_closing",
-        "label": "Ø Units pro Abschluss",
-        "description": "Units / Abschlüsse",
+        "label": "Ø Einheiten pro Abschluss",
+        "description": "Einheiten / Abschlüsse",
         "formula": "units_total / closings",
         "warn_threshold": 8,
         "good_threshold": 12,
@@ -138,7 +147,7 @@ async def _ensure_defaults(db: AsyncSession) -> None:
             formula=cfg["formula"],
             warn_threshold=cfg["warn_threshold"],
             good_threshold=cfg["good_threshold"],
-            visibility_roles=["starter", "teamleiter", "admin"],
+            visibility_roles=cfg.get("visibility_roles", ["starter", "teamleiter", "admin"]),
         )
         for cfg in DEFAULT_KPIS
         if cfg["name"] not in existing_names
@@ -233,6 +242,8 @@ async def update_kpi_config(
         config.good_threshold = None
     if payload.visibility is not None:
         new_visibility = [role.value for role in payload.visibility]
+        if name == "journey_kpis_panel" and "admin" not in new_visibility:
+            new_visibility.append("admin")
         if new_visibility != (config.visibility_roles or []):
             changes["visibility"] = {
                 "old": config.visibility_roles,
