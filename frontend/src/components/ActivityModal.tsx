@@ -120,7 +120,7 @@ function ActivityModal({
     appointmentLocation: string
   }>({
     contactRef: '',
-    outcome: 'answered_appt',
+    outcome: 'call_scheduled',
     notes: '',
     nextCallAt: '',
     appointmentType: 'first',
@@ -165,7 +165,7 @@ function ActivityModal({
       setClosingCongrats(null)
       setCallData({
         contactRef: '',
-        outcome: 'answered_appt',
+        outcome: 'call_scheduled',
         notes: '',
         nextCallAt: '',
         appointmentType: 'first',
@@ -300,6 +300,7 @@ function ActivityModal({
     const appointmentLabel =
       callData.appointmentType === 'second' ? 'Zweittermin angenommen' : 'Ersttermin angenommen'
     return [
+      { value: 'call_scheduled', label: 'Anruf geplant' },
       { value: 'answered_appt', label: appointmentLabel },
       { value: 'answered', label: 'Angenommen (kein Termin)' },
       { value: 'no_answer', label: 'Nicht erreicht' },
@@ -311,7 +312,7 @@ function ActivityModal({
   }, [callData.appointmentType])
 
   // Check if callback is required (no answer, busy, voicemail)
-  const needsCallback = ['no_answer', 'busy', 'voicemail'].includes(callData.outcome)
+  const needsCallback = ['call_scheduled', 'no_answer', 'busy', 'voicemail'].includes(callData.outcome)
   // Check if appointment scheduling is required (answered with appointment)
   const needsAppointment = callData.outcome === 'answered_appt'
   // Check if lead will be archived (declined)
@@ -443,7 +444,12 @@ function ActivityModal({
 
         endpoint = 'call'
         // Map answered_appt back to answered for backend
-        const backendOutcome = callData.outcome === 'answered_appt' ? 'answered' : callData.outcome
+        const backendOutcome =
+          callData.outcome === 'answered_appt'
+            ? 'answered'
+            : callData.outcome === 'call_scheduled'
+              ? 'no_answer'
+              : callData.outcome
         payload = {
           contactRef: callData.contactRef || undefined,
           outcome: backendOutcome,
@@ -608,7 +614,7 @@ function ActivityModal({
   const resetForm = () => {
     setCallData({
       contactRef: '',
-      outcome: 'answered_appt',
+      outcome: 'call_scheduled',
       notes: '',
       nextCallAt: '',
       appointmentType: 'first',

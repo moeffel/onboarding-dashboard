@@ -107,10 +107,7 @@ export default function StarterDashboard() {
     },
   })
 
-  const showJourneyKPIs = useMemo(() => {
-    if (!kpiConfig) return user?.role === 'admin'
-    return kpiConfig.some((cfg) => cfg.name === 'journey_kpis_panel')
-  }, [kpiConfig, user?.role])
+  const showJourneyKPIs = true
 
 
   const thresholdMap = useMemo(() => {

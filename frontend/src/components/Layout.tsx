@@ -28,7 +28,7 @@ export default function Layout({ children }: LayoutProps) {
       icon: LayoutDashboard,
       roles: ['starter', 'teamleiter', 'admin'],
       children: [
-        { name: 'Kunden', href: '/customers', roles: ['starter'] },
+        { name: 'Kunden', href: '/customers', roles: ['starter', 'teamleiter', 'admin'] },
       ],
     },
     { name: 'Team', href: '/team', icon: Users, roles: ['teamleiter', 'admin'] },
