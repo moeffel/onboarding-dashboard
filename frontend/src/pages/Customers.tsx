@@ -136,6 +136,7 @@ export default function Customers() {
   const [modalType, setModalType] = useState<'call' | 'appointment' | 'closing'>('call')
   const [modalLeadId, setModalLeadId] = useState<number | null>(null)
   const [modalLead, setModalLead] = useState<Lead | null>(null)
+  const [modalKey, setModalKey] = useState(0)
 
   const queryClient = useQueryClient()
 
@@ -253,6 +254,7 @@ export default function Customers() {
     setModalLeadId(lead.id)
     setModalLead(lead)
     setModalType(action)
+    setModalKey((k) => k + 1)
     setModalOpen(true)
   }
 
@@ -557,22 +559,25 @@ export default function Customers() {
 
       </div>
 
-      {/* Activity Modal with pre-selected lead */}
-      <ActivityModal
-        isOpen={isModalOpen}
-        initialType={modalType}
-        preSelectedLeadId={modalLeadId}
-        preSelectedLead={modalLead}
-        onLeadCreated={(lead) => {
-          setSelectedId(lead.id)
-        }}
-        onClose={() => {
-          setModalOpen(false)
-          setModalLeadId(null)
-          setModalLead(null)
-        }}
-        onSuccess={handleActivitySaved}
-      />
+      {/* Activity Modal with pre-selected lead - only render when open */}
+      {isModalOpen && (
+        <ActivityModal
+          key={`modal-${modalKey}`}
+          isOpen={true}
+          initialType={modalType}
+          preSelectedLeadId={modalLeadId}
+          preSelectedLead={modalLead}
+          onLeadCreated={(lead) => {
+            setSelectedId(lead.id)
+          }}
+          onClose={() => {
+            setModalOpen(false)
+            setModalLeadId(null)
+            setModalLead(null)
+          }}
+          onSuccess={handleActivitySaved}
+        />
+      )}
     </div>
   )
 }

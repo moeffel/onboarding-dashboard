@@ -109,10 +109,12 @@ function ActivityModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [closingCongrats, setClosingCongrats] = useState<string | null>(null)
-  const [leads, setLeads] = useState<Lead[]>([])
+  const [leads, setLeads] = useState<Lead[]>(preSelectedLead ? [preSelectedLead] : [])
   const [leadsLoaded, setLeadsLoaded] = useState(false)
   const [calendarEntries, setCalendarEntries] = useState<CalendarEntry[]>([])
-  const [selectedLeadId, setSelectedLeadId] = useState<string>('')
+  const [selectedLeadId, setSelectedLeadId] = useState<string>(
+    preSelectedLeadId ? String(preSelectedLeadId) : (preSelectedLead?.id ? String(preSelectedLead.id) : '')
+  )
 
   const [callData, setCallData] = useState<{
     contactRef: string
@@ -504,7 +506,8 @@ function ActivityModal({
     setError(null)
 
     try {
-      let leadId = selectedLeadId ? Number(selectedLeadId) : null
+      // WORKAROUND: Use preSelectedLead.id if available, otherwise fall back to selectedLeadId
+      let leadId = preSelectedLead?.id ?? (selectedLeadId ? Number(selectedLeadId) : null)
       if (!leadId) {
         if (activityType === 'closing') {
           throw new Error('Abschluss kann nur für bestehende Leads erfasst werden')
@@ -795,41 +798,57 @@ function ActivityModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Lead</p>
-            <Select
-              label={selectedLeadId ? 'Lead' : 'Lead auswählen'}
-              value={selectedLeadId}
-              onChange={(e) => setSelectedLeadId(e.target.value)}
-              options={[
-                ...(canCreateNewLead ? [{ value: '', label: 'Neuen Lead anlegen' }] : []),
-                ...leadSelectOptions,
-              ]}
-            />
-            {!selectedLeadId && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Input
-                  label="Name (Pflicht)"
-                  value={leadData.fullName}
-                  onChange={(e) => setLeadData({ ...leadData, fullName: e.target.value })}
-                  required
+            {/* WORKAROUND: If preSelectedLead is provided, show it directly instead of dropdown */}
+            {preSelectedLead ? (
+              <>
+                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-sm font-medium text-slate-900">{preSelectedLead.fullName}</p>
+                  <p className="text-xs text-slate-500">{preSelectedLead.phone}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 flex items-center justify-between">
+                  <span>Status: {statusLabels[preSelectedLead.currentStatus] || preSelectedLead.currentStatus}</span>
+                  <span>Nächster Schritt: {getNextStepLabel(preSelectedLead.currentStatus)}</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <Select
+                  label={selectedLeadId ? 'Lead' : 'Lead auswählen'}
+                  value={selectedLeadId}
+                  onChange={(e) => setSelectedLeadId(e.target.value)}
+                  options={[
+                    ...(canCreateNewLead ? [{ value: '', label: 'Neuen Lead anlegen' }] : []),
+                    ...leadSelectOptions,
+                  ]}
                 />
-                <Input
-                  label="Telefonnummer (Pflicht)"
-                  value={leadData.phone}
-                  onChange={(e) => setLeadData({ ...leadData, phone: e.target.value })}
-                  required
-                />
-                <Input
-                  label="E-Mail (optional)"
-                  value={leadData.email}
-                  onChange={(e) => setLeadData({ ...leadData, email: e.target.value })}
-                />
-              </div>
-            )}
-            {selectedLead && (
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 flex items-center justify-between">
-                <span>Status: {statusLabels[selectedLead.currentStatus] || selectedLead.currentStatus}</span>
-                <span>Nächster Schritt: {getNextStepLabel(selectedLead.currentStatus)}</span>
-              </div>
+                {!selectedLeadId && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Input
+                      label="Name (Pflicht)"
+                      value={leadData.fullName}
+                      onChange={(e) => setLeadData({ ...leadData, fullName: e.target.value })}
+                      required
+                    />
+                    <Input
+                      label="Telefonnummer (Pflicht)"
+                      value={leadData.phone}
+                      onChange={(e) => setLeadData({ ...leadData, phone: e.target.value })}
+                      required
+                    />
+                    <Input
+                      label="E-Mail (optional)"
+                      value={leadData.email}
+                      onChange={(e) => setLeadData({ ...leadData, email: e.target.value })}
+                    />
+                  </div>
+                )}
+                {selectedLead && (
+                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 flex items-center justify-between">
+                    <span>Status: {statusLabels[selectedLead.currentStatus] || selectedLead.currentStatus}</span>
+                    <span>Nächster Schritt: {getNextStepLabel(selectedLead.currentStatus)}</span>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
