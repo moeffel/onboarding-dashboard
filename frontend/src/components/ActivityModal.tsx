@@ -289,6 +289,23 @@ function ActivityModal({
     return leads.find((lead) => String(lead.id) === selectedLeadId) ?? null
   }, [leads, selectedLeadId])
 
+  const leadSelectOptions = useMemo(() => {
+    const base = filteredLeads.map((lead) => ({
+      value: String(lead.id),
+      label: `${lead.fullName} • ${lead.phone}`,
+    }))
+    if (selectedLeadId && !base.some((opt) => opt.value === selectedLeadId)) {
+      const fallback = selectedLead || preSelectedLead
+      if (fallback) {
+        base.unshift({
+          value: String(fallback.id),
+          label: `${fallback.fullName} • ${fallback.phone}`,
+        })
+      }
+    }
+    return base
+  }, [filteredLeads, selectedLeadId, selectedLead, preSelectedLead])
+
   const minDateTime = useMemo(() => {
     const now = new Date()
     now.setSeconds(0, 0)
@@ -749,10 +766,7 @@ function ActivityModal({
               onChange={(e) => setSelectedLeadId(e.target.value)}
               options={[
                 ...(canCreateNewLead ? [{ value: '', label: 'Neuen Lead anlegen' }] : []),
-                ...filteredLeads.map((lead) => ({
-                  value: String(lead.id),
-                  label: `${lead.fullName} • ${lead.phone}`,
-                })),
+                ...leadSelectOptions,
               ]}
             />
             {!selectedLeadId && (
