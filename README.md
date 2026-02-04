@@ -5,6 +5,9 @@ app_port: 7860
 ---
 https://markoe89-onboarding-dashboard.hf.space
 
+https://huggingface.co/spaces/markoe89/onboarding-dashboard
+
+
 # Onboarding Dashboard
 
 Ein Onboarding-Dashboard für neue Mitarbeiter mit FastAPI Backend und React Frontend.
