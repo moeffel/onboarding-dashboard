@@ -22,7 +22,8 @@ def upgrade() -> None:
         "closing_events",
         sa.Column("result", closing_result, nullable=False, server_default="won"),
     )
-    op.alter_column("closing_events", "result", server_default=None)
+    if op.get_bind().dialect.name != "sqlite":
+        op.alter_column("closing_events", "result", server_default=None)
 
 
 def downgrade() -> None:
