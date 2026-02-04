@@ -67,7 +67,7 @@ export default function StarterDashboard() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
 
-  const isCustomReady = period !== 'custom' || (customRange.start && customRange.end)
+  const isCustomReady = period !== 'custom' || Boolean(customRange.start && customRange.end)
 
   const { data: kpis, isLoading, error } = useQuery({
     queryKey: ['kpis', 'me', period, customRange.start, customRange.end],

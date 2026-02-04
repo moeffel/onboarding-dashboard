@@ -667,7 +667,9 @@ function ActivityModal({
                   <Select
                     label="Terminformat"
                     value={callData.appointmentMode}
-                    onChange={(e) => setCallData({ ...callData, appointmentMode: e.target.value })}
+                    onChange={(e) =>
+                      setCallData({ ...callData, appointmentMode: e.target.value as AppointmentMode })
+                    }
                     options={appointmentModeOptions}
                   />
                   {callData.appointmentMode === 'in_person' && (
@@ -795,7 +797,9 @@ function ActivityModal({
               <Select
                 label="Terminformat"
                 value={appointmentData.mode}
-                onChange={(e) => setAppointmentData({ ...appointmentData, mode: e.target.value })}
+                onChange={(e) =>
+                  setAppointmentData({ ...appointmentData, mode: e.target.value as AppointmentMode })
+                }
                 options={appointmentModeOptions}
               />
               {appointmentData.mode === 'in_person' && (

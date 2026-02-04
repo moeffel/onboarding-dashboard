@@ -109,7 +109,7 @@ export default function TeamleiterDashboard() {
   const { user } = useAuth()
   const [customRange, setCustomRange] = useState<DateRange>({ start: '', end: '' })
 
-  const isCustomReady = period !== 'custom' || (customRange.start && customRange.end)
+  const isCustomReady = period !== 'custom' || Boolean(customRange.start && customRange.end)
 
   const { data: teamData, isLoading, error } = useQuery({
     queryKey: ['kpis', 'team', period, customRange.start, customRange.end],

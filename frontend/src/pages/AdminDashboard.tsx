@@ -113,7 +113,7 @@ export default function AdminDashboard() {
     key: 'name',
     direction: 'asc',
   })
-  const isCustomReady = period !== 'custom' || (customRange.start && customRange.end)
+  const isCustomReady = period !== 'custom' || Boolean(customRange.start && customRange.end)
 
   const { data: teams, isLoading: teamsLoading } = useQuery({
     queryKey: ['admin', 'teams'],
@@ -122,7 +122,7 @@ export default function AdminDashboard() {
 
   const { data: teamKpis, isLoading: teamKpisLoading } = useQuery({
     queryKey: ['kpis', 'team', selectedTeamId, period, customRange.start, customRange.end],
-    queryFn: () => (selectedTeamId ? fetchTeamKPIs(selectedTeamId, period, customRange) : null),
+    queryFn: () => fetchTeamKPIs(selectedTeamId!, period, customRange),
     enabled: !!selectedTeamId && isCustomReady,
   })
 
@@ -140,7 +140,7 @@ export default function AdminDashboard() {
 
   const { data: starterKpis } = useQuery({
     queryKey: ['kpis', 'user', selectedStarterId, period, customRange.start, customRange.end],
-    queryFn: () => (selectedStarterId ? fetchUserKPIs(selectedStarterId, period, customRange) : null),
+    queryFn: () => fetchUserKPIs(selectedStarterId!, period, customRange),
     enabled: !!selectedStarterId && isCustomReady,
   })
 
