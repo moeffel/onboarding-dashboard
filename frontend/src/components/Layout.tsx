@@ -31,7 +31,7 @@ export default function Layout({ children }: LayoutProps) {
         { name: 'Kunden', href: '/customers', roles: ['starter', 'teamleiter', 'admin'] },
       ],
     },
-    { name: 'Team', href: '/team', icon: Users, roles: ['teamleiter', 'admin'] },
+    { name: 'Team', href: '/team', icon: Users, roles: ['admin'] },
     { name: 'Admin', href: '/admin', icon: Settings, roles: ['admin'] },
   ]
 

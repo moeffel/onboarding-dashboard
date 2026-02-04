@@ -11,6 +11,8 @@ interface ActivityModalProps {
   isOpen: boolean
   initialType?: ActivityType
   preSelectedLeadId?: number | null
+  preSelectedLead?: Lead | null
+  onLeadCreated?: (lead: Lead) => void
   onClose: () => void
   onSuccess: () => void
 }
@@ -98,6 +100,8 @@ function ActivityModal({
   isOpen,
   initialType = 'call',
   preSelectedLeadId,
+  preSelectedLead,
+  onLeadCreated,
   onClose,
   onSuccess,
 }: ActivityModalProps) {
@@ -180,14 +184,21 @@ function ActivityModal({
       setClosingData({ units: '', result: 'won', productCategory: '', notes: '' })
       setLeadData({ fullName: '', phone: '', email: '' })
       setSelectedLeadId(preSelectedLeadId ? String(preSelectedLeadId) : '')
+      setLeads(preSelectedLead ? [preSelectedLead] : [])
       setCalendarEntries([])
       // Pre-select lead if provided
       fetch('/api/leads', { credentials: 'include' })
         .then((res) => (res.ok ? res.json() : Promise.reject()))
-        .then((data: Lead[]) => setLeads(data))
+        .then((data: Lead[]) => {
+          if (preSelectedLead && !data.some((lead) => lead.id === preSelectedLead.id)) {
+            setLeads([preSelectedLead, ...data])
+          } else {
+            setLeads(data)
+          }
+        })
         .catch(() => setLeads([]))
     }
-  }, [initialType, isOpen, preSelectedLeadId])
+  }, [initialType, isOpen, preSelectedLead, preSelectedLeadId])
 
   useEffect(() => {
     if (!selectedLeadId && callData.appointmentType === 'second') {
@@ -288,6 +299,16 @@ function ActivityModal({
     )
   }, [calendarEntries, selectedLead, appointmentData.type, callData.appointmentType, activityType])
 
+  const scheduledCallEntry = useMemo(() => {
+    if (!selectedLead) return null
+    return (
+      calendarEntries
+        .filter((entry) => entry.leadId === selectedLead.id && entry.status === 'call_scheduled')
+        .sort((a, b) => new Date(b.scheduledFor).getTime() - new Date(a.scheduledFor).getTime())[0] ||
+      null
+    )
+  }, [calendarEntries, selectedLead])
+
   const activeLabel = useMemo(() => {
     switch (activityType) {
       case 'appointment':
@@ -365,6 +386,16 @@ function ActivityModal({
     callData.appointmentLocation,
   ])
 
+  useEffect(() => {
+    if (!scheduledCallEntry) return
+    if (callData.outcome === 'call_scheduled' && !callData.nextCallAt) {
+      setCallData((prev) => ({
+        ...prev,
+        nextCallAt: toLocalDateTimeInput(scheduledCallEntry.scheduledFor),
+      }))
+    }
+  }, [scheduledCallEntry, callData.outcome, callData.nextCallAt])
+
   if (!isOpen) return null
 
   const callOutcomeHint = () => {
@@ -377,7 +408,7 @@ function ActivityModal({
         : 'Ersttermin wird nach dem Gespräch direkt geplant.'
     }
     if (needsCallback) {
-      return 'Bitte Rückruftermin setzen, damit der Lead im Kalender erscheint.'
+      return 'Bitte Anruftermin setzen, damit der Lead im Kalender erscheint.'
     }
     if (willArchive) {
       return 'Abgelehnte Leads werden automatisch archiviert.'
@@ -436,6 +467,7 @@ function ActivityModal({
         const createdLead = (await leadResponse.json()) as Lead
         leadId = createdLead.id
         if (activityType === 'call' && callData.leadOnly) {
+          onLeadCreated?.(createdLead)
           onSuccess()
           onClose()
           resetForm()
@@ -449,7 +481,7 @@ function ActivityModal({
       if (activityType === 'call') {
         // Validate required fields based on outcome
         if (needsCallback && !callData.nextCallAt) {
-          throw new Error('Rückrufdatum ist erforderlich wenn keine Antwort')
+          throw new Error('Anrufdatum ist erforderlich wenn keine Antwort')
         }
         if (needsAppointment && !callData.appointmentDatetime) {
           throw new Error('Termindatum ist erforderlich bei Termin angenommen')
@@ -469,7 +501,7 @@ function ActivityModal({
           notes: callData.notes || undefined,
           leadId,
           nextCallAt: callData.nextCallAt
-            ? normalizeDateTime(callData.nextCallAt, 'Rückrufdatum ist ungültig')
+            ? normalizeDateTime(callData.nextCallAt, 'Anrufdatum ist ungültig')
             : undefined,
         }
 
@@ -693,7 +725,7 @@ function ActivityModal({
           <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Lead</p>
             <Select
-              label="Bestehenden Lead wählen"
+              label={selectedLeadId ? 'Lead' : 'Lead auswählen'}
               value={selectedLeadId}
               onChange={(e) => setSelectedLeadId(e.target.value)}
               options={[
@@ -811,9 +843,13 @@ function ActivityModal({
               {/* Show callback field when no answer/busy/voicemail */}
               {needsCallback && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
-                  <p className="text-sm font-medium text-amber-700">Rückruf planen (Pflicht)</p>
+                  <p className="text-sm font-medium text-amber-700">
+                    {scheduledCallEntry
+                      ? `Anruf geplant am ${formatShortDateTime(scheduledCallEntry.scheduledFor)}`
+                      : 'Anruf planen (Pflicht)'}
+                  </p>
                   <Input
-                    label="Rückruf Datum/Uhrzeit"
+                    label="Anruf Datum/Uhrzeit"
                     type="datetime-local"
                     value={callData.nextCallAt}
                     onChange={(e) => setCallData({ ...callData, nextCallAt: e.target.value })}
@@ -821,7 +857,7 @@ function ActivityModal({
                     required
                   />
                   <p className="text-xs text-amber-700/80">
-                    Bei „Nicht erreicht“, „Besetzt“ oder „Mailbox“ ist ein Rückruf erforderlich.
+                    Bei „Nicht erreicht“, „Besetzt“ oder „Mailbox“ ist ein Anruf erforderlich.
                   </p>
                 </div>
               )}

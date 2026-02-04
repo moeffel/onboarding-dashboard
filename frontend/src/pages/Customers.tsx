@@ -81,7 +81,7 @@ function getNextActionLabel(status: LeadStatus): string {
   const action = getNextAction(status)
   switch (action) {
     case 'call':
-      return status === 'call_scheduled' ? 'Rückruf erfassen' : 'Anruf erfassen'
+      return status === 'call_scheduled' ? 'Anruf planen' : 'Anruf erfassen'
     case 'appointment':
       if (['contact_established', 'first_appt_pending', 'first_appt_scheduled'].includes(status)) {
         return 'Ersttermin erfassen'
@@ -135,6 +135,7 @@ export default function Customers() {
   const [isModalOpen, setModalOpen] = useState(false)
   const [modalType, setModalType] = useState<'call' | 'appointment' | 'closing'>('call')
   const [modalLeadId, setModalLeadId] = useState<number | null>(null)
+  const [modalLead, setModalLead] = useState<Lead | null>(null)
 
   const queryClient = useQueryClient()
 
@@ -226,6 +227,8 @@ export default function Customers() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads', 'customers'] })
       queryClient.invalidateQueries({ queryKey: ['leads', 'calendar', 'month'] })
+      queryClient.invalidateQueries({ queryKey: ['kpis'] })
+      queryClient.invalidateQueries({ queryKey: ['events'] })
       setSelectedId(null)
     },
     onError: (err) => {
@@ -236,7 +239,9 @@ export default function Customers() {
   const handleLeadAction = (lead: Lead) => {
     const action = getNextAction(lead.currentStatus)
     if (!action) return
+    setSelectedId(lead.id)
     setModalLeadId(lead.id)
+    setModalLead(lead)
     setModalType(action)
     setModalOpen(true)
   }
@@ -357,7 +362,7 @@ export default function Customers() {
                             Erstellt: {new Date(lead.createdAt).toLocaleDateString('de-AT')}
                           </div>
                           <div className="text-xs text-slate-500">
-                            Letzte Aktivität: {lead.lastActivityAt ? new Date(lead.lastActivityAt).toLocaleDateString('de-AT') : '—'}
+                            Nächste Aktivität: {lead.lastActivityAt ? new Date(lead.lastActivityAt).toLocaleDateString('de-AT') : '—'}
                           </div>
                           <div className="flex items-center gap-2">
                             {nextAction && (
@@ -437,7 +442,7 @@ export default function Customers() {
                           />
                         </th>
                         <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500">Erstellt am</th>
-                        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500">Letzte Aktivität</th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-slate-500">Nächste Aktivität</th>
                         <th className="text-right py-3 px-4 text-xs font-semibold text-slate-500">Löschen</th>
                       </tr>
                     </thead>
@@ -531,9 +536,14 @@ export default function Customers() {
         isOpen={isModalOpen}
         initialType={modalType}
         preSelectedLeadId={modalLeadId}
+        preSelectedLead={modalLead}
+        onLeadCreated={(lead) => {
+          setSelectedId(lead.id)
+        }}
         onClose={() => {
           setModalOpen(false)
           setModalLeadId(null)
+          setModalLead(null)
         }}
         onSuccess={handleActivitySaved}
       />

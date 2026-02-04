@@ -8,7 +8,7 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
@@ -310,12 +310,13 @@ async def approve_user(
             select(Team).where(Team.lead_user_id == user.id)
         )
         if existing_team.scalar_one_or_none() is None:
-            db.add(
-                Team(
-                    name=f"Team {user.first_name} {user.last_name}",
-                    lead_user_id=user.id,
-                )
+            name = f"Team {user.first_name} {user.last_name}".strip()
+            dup_check = await db.execute(
+                select(func.count(Team.id)).where(Team.name == name)
             )
+            if (dup_check.scalar() or 0) > 0:
+                name = f"{name} ({user.id})"
+            db.add(Team(name=name, lead_user_id=user.id))
 
     await log_audit(
         db,
@@ -469,12 +470,13 @@ async def update_user(
             select(Team).where(Team.lead_user_id == user.id)
         )
         if existing_team.scalar_one_or_none() is None:
-            db.add(
-                Team(
-                    name=f"Team {user.first_name} {user.last_name}",
-                    lead_user_id=user.id,
-                )
+            name = f"Team {user.first_name} {user.last_name}".strip()
+            dup_check = await db.execute(
+                select(func.count(Team.id)).where(Team.name == name)
             )
+            if (dup_check.scalar() or 0) > 0:
+                name = f"{name} ({user.id})"
+            db.add(Team(name=name, lead_user_id=user.id))
 
     return user_to_response(user)
 
