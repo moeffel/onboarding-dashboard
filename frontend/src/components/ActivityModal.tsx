@@ -198,10 +198,22 @@ function ActivityModal({
           } else {
             setLeads(data)
           }
+          // Re-apply selectedLeadId after leads are loaded to ensure it's set
+          if (initialLeadId) {
+            setSelectedLeadId(String(initialLeadId))
+          }
           setLeadsLoaded(true)
         })
         .catch(() => {
-          setLeads([])
+          // Even on error, keep the preSelectedLead if provided
+          if (preSelectedLead) {
+            setLeads([preSelectedLead])
+          } else {
+            setLeads([])
+          }
+          if (initialLeadId) {
+            setSelectedLeadId(String(initialLeadId))
+          }
           setLeadsLoaded(true)
         })
     }
@@ -259,7 +271,13 @@ function ActivityModal({
 
   useEffect(() => {
     if (!leadsLoaded) return
+    // If preSelectedLead is provided, ensure it's selected
+    const fallbackId = preSelectedLeadId ?? preSelectedLead?.id ?? null
     if (!selectedLeadId) {
+      if (fallbackId) {
+        setSelectedLeadId(String(fallbackId))
+        return
+      }
       if (!canCreateNewLead && filteredLeads[0]) {
         setSelectedLeadId(String(filteredLeads[0].id))
       }
@@ -380,9 +398,11 @@ function ActivityModal({
     ]
   }, [callData.appointmentType])
 
+  // Check if a call needs to be scheduled (call_scheduled)
+  const needsCallSchedule = !callData.leadOnly && callData.outcome === 'call_scheduled'
   // Check if callback is required (no answer, busy, voicemail)
   const needsCallback =
-    !callData.leadOnly && ['call_scheduled', 'no_answer', 'busy', 'voicemail'].includes(callData.outcome)
+    !callData.leadOnly && ['no_answer', 'busy', 'voicemail'].includes(callData.outcome)
   // Check if appointment scheduling is required (answered with appointment)
   const needsAppointment = !callData.leadOnly && callData.outcome === 'answered_appt'
   // Check if lead will be archived (declined)
@@ -452,8 +472,11 @@ function ActivityModal({
         ? 'Zweittermin wird nach dem Gespräch direkt geplant.'
         : 'Ersttermin wird nach dem Gespräch direkt geplant.'
     }
-    if (needsCallback) {
+    if (needsCallSchedule) {
       return 'Bitte Anruftermin setzen, damit der Lead im Kalender erscheint.'
+    }
+    if (needsCallback) {
+      return 'Bitte Rückruftermin setzen, damit der Lead im Kalender erscheint.'
     }
     if (willArchive) {
       return 'Abgelehnte Leads werden automatisch archiviert.'
@@ -525,8 +548,11 @@ function ActivityModal({
 
       if (activityType === 'call') {
         // Validate required fields based on outcome
+        if (needsCallSchedule && !callData.nextCallAt) {
+          throw new Error('Anrufdatum ist erforderlich bei geplanten Anrufen')
+        }
         if (needsCallback && !callData.nextCallAt) {
-          throw new Error('Anrufdatum ist erforderlich wenn keine Antwort')
+          throw new Error('Rückrufdatum ist erforderlich wenn keine Antwort')
         }
         if (needsAppointment && !callData.appointmentDatetime) {
           throw new Error('Termindatum ist erforderlich bei Termin angenommen')
@@ -882,8 +908,8 @@ function ActivityModal({
                 </div>
               )}
 
-              {/* Show callback field when no answer/busy/voicemail */}
-              {needsCallback && (
+              {/* Show call scheduling field when "Anruf geplant" */}
+              {needsCallSchedule && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
                   <p className="text-sm font-medium text-amber-700">
                     {scheduledCallEntry
@@ -899,7 +925,29 @@ function ActivityModal({
                     required
                   />
                   <p className="text-xs text-amber-700/80">
-                    Bei „Nicht erreicht“, „Besetzt“ oder „Mailbox“ ist ein Anruf erforderlich.
+                    Bei „Anruf geplant" ist ein Anruftermin erforderlich.
+                  </p>
+                </div>
+              )}
+
+              {/* Show callback field when no answer/busy/voicemail */}
+              {needsCallback && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+                  <p className="text-sm font-medium text-amber-700">
+                    {scheduledCallEntry
+                      ? `Rückruf geplant am ${formatShortDateTime(scheduledCallEntry.scheduledFor)}`
+                      : 'Rückruf planen (Pflicht)'}
+                  </p>
+                  <Input
+                    label="Rückruf Datum/Uhrzeit"
+                    type="datetime-local"
+                    value={callData.nextCallAt}
+                    onChange={(e) => setCallData({ ...callData, nextCallAt: e.target.value })}
+                    min={minDateTime}
+                    required
+                  />
+                  <p className="text-xs text-amber-700/80">
+                    Bei „Nicht erreicht", „Besetzt" oder „Mailbox" ist ein Rückruf erforderlich.
                   </p>
                 </div>
               )}
