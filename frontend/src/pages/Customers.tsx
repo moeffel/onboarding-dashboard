@@ -74,8 +74,8 @@ function getNextAction(status: LeadStatus): 'call' | 'appointment' | 'closing' |
   switch (status) {
     case 'new_cold':
     case 'call_scheduled':
-    case 'contact_established':
       return 'call'
+    case 'contact_established':
     case 'first_appt_pending':
     case 'first_appt_scheduled':
     case 'first_appt_completed':
@@ -95,8 +95,14 @@ function getNextActionLabel(status: LeadStatus): string {
   const action = getNextAction(status)
   switch (action) {
     case 'call':
-      return 'Anruf erfassen'
+      return status === 'call_scheduled' ? 'Rückruf erfassen' : 'Anruf erfassen'
     case 'appointment':
+      if (['contact_established', 'first_appt_pending', 'first_appt_scheduled'].includes(status)) {
+        return 'Ersttermin erfassen'
+      }
+      if (['first_appt_completed', 'second_appt_scheduled'].includes(status)) {
+        return 'Zweittermin erfassen'
+      }
       return 'Termin erfassen'
     case 'closing':
       return 'Abschluss erfassen'
@@ -299,6 +305,28 @@ export default function Customers() {
     },
   })
 
+  const deleteLeadMutation = useMutation({
+    mutationFn: async (leadId: number) => {
+      const res = await fetch(`/api/leads/${leadId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null)
+        throw new Error(detail?.detail || 'Lead konnte nicht gelöscht werden')
+      }
+      return true
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads', 'customers'] })
+      queryClient.invalidateQueries({ queryKey: ['leads', 'calendar', 'month'] })
+      setSelectedId(null)
+    },
+    onError: (err) => {
+      alert(err instanceof Error ? err.message : 'Lead konnte nicht gelöscht werden')
+    },
+  })
+
   const toggleNote = (id: number) => {
     setExpandedNotes((prev) => ({ ...prev, [id]: !prev[id] }))
   }
@@ -309,6 +337,11 @@ export default function Customers() {
     setModalLeadId(lead.id)
     setModalType(action)
     setModalOpen(true)
+  }
+
+  const handleDeleteLead = (lead: Lead) => {
+    if (!confirm(`Lead "${lead.fullName}" wirklich löschen?`)) return
+    deleteLeadMutation.mutate(lead.id)
   }
 
   const handleQuickAction = (lead: Lead, type: 'call' | 'appointment' | 'closing') => {
@@ -670,6 +703,21 @@ export default function Customers() {
                   </div>
                   <p className="mt-2 text-xs text-slate-500">
                     Aktionen sind statusabhängig. Abschluss erst nach durchgeführtem Zweittermin.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-400">Lead löschen</p>
+                  <Button
+                    variant="danger"
+                    className="mt-2 w-full"
+                    onClick={() => handleDeleteLead(selectedLead)}
+                    isLoading={deleteLeadMutation.isLoading}
+                  >
+                    Lead endgültig löschen
+                  </Button>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Der Löschvorgang wird im Audit-Log protokolliert.
                   </p>
                 </div>
 

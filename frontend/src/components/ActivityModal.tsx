@@ -184,6 +184,40 @@ function ActivityModal({
   }, [initialType, isOpen, preSelectedLeadId])
 
   useEffect(() => {
+    if (!selectedLeadId && callData.appointmentType === 'second') {
+      setCallData((prev) => ({ ...prev, appointmentType: 'first' }))
+    }
+  }, [callData.appointmentType, selectedLeadId])
+
+  const canCreateNewLead =
+    !(activityType === 'closing' || (activityType === 'appointment' && appointmentData.type === 'second'))
+
+  const filteredLeads = useMemo(() => {
+    if (activityType === 'appointment') {
+      if (appointmentData.type === 'second') {
+        return leads.filter((lead) => lead.currentStatus === 'second_appt_scheduled')
+      }
+      return leads.filter((lead) => lead.currentStatus === 'first_appt_scheduled')
+    }
+    if (activityType === 'closing') {
+      return leads.filter((lead) => lead.currentStatus === 'second_appt_completed')
+    }
+    return leads
+  }, [activityType, appointmentData.type, leads])
+
+  useEffect(() => {
+    if (!selectedLeadId) {
+      if (!canCreateNewLead && filteredLeads[0]) {
+        setSelectedLeadId(String(filteredLeads[0].id))
+      }
+      return
+    }
+    if (!filteredLeads.some((lead) => String(lead.id) === selectedLeadId)) {
+      setSelectedLeadId(canCreateNewLead ? '' : (filteredLeads[0] ? String(filteredLeads[0].id) : ''))
+    }
+  }, [canCreateNewLead, filteredLeads, selectedLeadId])
+
+  useEffect(() => {
     if (!isOpen) return
     if (!selectedLeadId) {
       setCalendarEntries([])
@@ -270,6 +304,9 @@ function ActivityModal({
   // Check if lead will be archived (declined)
   const willArchive = callData.outcome === 'declined'
   const appointmentTypeLocked = !!selectedLead
+  const callAppointmentTypeOptions = selectedLeadId
+    ? appointmentTypeOptions
+    : appointmentTypeOptions.filter((option) => option.value === 'first')
 
   useEffect(() => {
     if (!scheduledEntry) return
@@ -349,6 +386,15 @@ function ActivityModal({
     try {
       let leadId = selectedLeadId ? Number(selectedLeadId) : null
       if (!leadId) {
+        if (activityType === 'closing') {
+          throw new Error('Abschluss kann nur für bestehende Leads erfasst werden')
+        }
+        if (activityType === 'appointment' && appointmentData.type === 'second') {
+          throw new Error('Zweittermin kann nur für bestehende Leads erfasst werden')
+        }
+        if (activityType === 'call' && callData.appointmentType === 'second') {
+          throw new Error('Zweittermin kann nur für bestehende Leads erfasst werden')
+        }
         if (!leadData.fullName.trim() || !leadData.phone.trim()) {
           throw new Error('Name und Telefonnummer sind Pflichtfelder')
         }
@@ -585,8 +631,8 @@ function ActivityModal({
               value={selectedLeadId}
               onChange={(e) => setSelectedLeadId(e.target.value)}
               options={[
-                { value: '', label: 'Neuen Lead anlegen' },
-                ...leads.map((lead) => ({
+                ...(canCreateNewLead ? [{ value: '', label: 'Neuen Lead anlegen' }] : []),
+                ...filteredLeads.map((lead) => ({
                   value: String(lead.id),
                   label: `${lead.fullName} • ${lead.phone}`,
                 })),
@@ -652,8 +698,8 @@ function ActivityModal({
                     label="Terminart"
                     value={callData.appointmentType}
                     onChange={(e) => setCallData({ ...callData, appointmentType: e.target.value })}
-                    options={appointmentTypeOptions}
-                    disabled={appointmentTypeLocked}
+                    options={callAppointmentTypeOptions}
+                    disabled={appointmentTypeLocked || !selectedLeadId}
                   />
                   <Input
                     label="Termin Datum/Uhrzeit (Pflicht)"

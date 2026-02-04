@@ -5,16 +5,20 @@ from typing import Annotated, Optional
 from datetime import date, time
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from models import (
+    AppointmentEvent,
+    CallEvent,
+    ClosingEvent,
     Lead,
+    LeadEventMapping,
     LeadStatus,
+    LeadStatusHistory,
     UserRole,
     AuditAction,
-    AppointmentEvent,
     AppointmentResult,
     AppointmentType,
 )
@@ -92,6 +96,28 @@ async def create_lead(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User hat kein Team",
+        )
+
+    duplicate_stmt = (
+        select(Lead.id)
+        .where(Lead.team_id == current_user.team_id)
+        .where(Lead.full_name == payload.fullName)
+    )
+    if payload.email:
+        duplicate_stmt = duplicate_stmt.where(
+            or_(
+                Lead.email == payload.email,
+                Lead.phone == payload.phone,
+            )
+        )
+    else:
+        duplicate_stmt = duplicate_stmt.where(Lead.phone == payload.phone)
+
+    duplicate = await db.execute(duplicate_stmt.limit(1))
+    if duplicate.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Lead existiert bereits",
         )
 
     lead = Lead(
@@ -218,6 +244,41 @@ async def list_team_leads(
         )
         for lead in leads
     ]
+
+
+@router.delete("/{lead_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_lead(
+    lead_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user = Depends(get_current_user),
+):
+    lead = await db.get(Lead, lead_id)
+    if not lead:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lead nicht gefunden")
+
+    ensure_lead_access(lead, current_user)
+
+    await log_audit(
+        db,
+        action=AuditAction.DELETE,
+        actor_user_id=current_user.id,
+        object_type="Lead",
+        object_id=lead.id,
+        diff={
+            "full_name": lead.full_name,
+            "phone": lead.phone,
+            "email": lead.email,
+            "team_id": lead.team_id,
+        },
+    )
+
+    await db.execute(delete(CallEvent).where(CallEvent.lead_id == lead.id))
+    await db.execute(delete(AppointmentEvent).where(AppointmentEvent.lead_id == lead.id))
+    await db.execute(delete(ClosingEvent).where(ClosingEvent.lead_id == lead.id))
+    await db.execute(delete(LeadEventMapping).where(LeadEventMapping.lead_id == lead.id))
+    await db.execute(delete(LeadStatusHistory).where(LeadStatusHistory.lead_id == lead.id))
+
+    await db.delete(lead)
 
 
 @router.patch("/{lead_id}/status", response_model=LeadResponse)

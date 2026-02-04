@@ -330,6 +330,11 @@ async def create_appointment_event(
     if event_data.leadId is not None:
         lead = await get_accessible_lead(db, event_data.leadId, current_user)
         lead_id = lead.id
+    elif event_data.type == AppointmentType.SECOND:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Zweittermin kann nur für bestehende Leads erfasst werden",
+        )
 
     if event_data.result == AppointmentResult.SET and event_data.eventDatetime is None:
         raise HTTPException(
@@ -466,6 +471,11 @@ async def create_closing_event(
     if event_data.leadId is not None:
         lead = await get_accessible_lead(db, event_data.leadId, current_user)
         lead_id = lead.id
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Abschluss kann nur für bestehende Leads erfasst werden",
+        )
 
     if event_data.eventDatetime is not None:
         _ensure_not_past(event_data.eventDatetime, "Abschluss-Datum")
