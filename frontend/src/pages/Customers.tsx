@@ -8,6 +8,7 @@ import Button from '../components/ui/Button'
 import SortableHeader from '../components/ui/SortableHeader'
 import { Phone, Calendar, Target } from 'lucide-react'
 import ActivityModal from '../components/ActivityModal'
+import { BUILD_STAMP } from '../buildStamp'
 
 const statusLabels: Record<string, string> = {
   new_cold: 'Neu / Kaltakquise',
@@ -300,7 +301,7 @@ export default function Customers() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-build={BUILD_STAMP}>
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Kunden</h1>
