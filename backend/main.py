@@ -68,6 +68,11 @@ async def add_security_headers(request: Request, call_next):
     if not request.url.path.startswith("/api"):
         for header, value in SECURITY_HEADERS.items():
             response.headers[header] = value
+        content_type = response.headers.get("content-type", "")
+        if "text/html" in content_type:
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
     else:
         # Still add some security headers for API responses
         response.headers["X-Content-Type-Options"] = "nosniff"
