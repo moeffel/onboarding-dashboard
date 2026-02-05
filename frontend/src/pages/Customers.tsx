@@ -6,7 +6,7 @@ import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
 import Button from '../components/ui/Button'
 import SortableHeader from '../components/ui/SortableHeader'
-import { Phone, Calendar, Target, ArrowRight } from 'lucide-react'
+import { Phone, Calendar, Target } from 'lucide-react'
 import ActivityModal from '../components/ActivityModal'
 
 const statusLabels: Record<string, string> = {
@@ -379,7 +379,16 @@ export default function Customers() {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-sm font-medium text-slate-900">{lead.fullName}</p>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleLeadAction(lead)
+                              }}
+                              className="text-left text-sm font-medium text-slate-900 hover:text-sl-red hover:underline"
+                            >
+                              {lead.fullName}
+                            </button>
                             <p className="text-xs text-slate-500">{lead.phone}</p>
                           </div>
                           <span
@@ -399,18 +408,10 @@ export default function Customers() {
                           </div>
                           <div className="flex items-center gap-2">
                             {nextAction && (
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleLeadAction(lead)
-                                }}
-                                className="flex items-center gap-2"
-                              >
+                              <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
                                 {getNextActionIcon(lead.currentStatus)}
                                 {getNextActionLabel(lead.currentStatus)}
-                              </Button>
+                              </div>
                             )}
                             {!nextAction && lead.currentStatus === 'closed_won' && (
                               <span className="text-xs text-green-600 font-medium">Abgeschlossen</span>
@@ -510,7 +511,16 @@ export default function Customers() {
                             }`}
                           >
                             <td className="py-3 px-4 text-sm font-medium text-slate-900">
-                              {lead.fullName}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleLeadAction(lead)
+                                }}
+                                className="text-left font-medium text-slate-900 hover:text-sl-red hover:underline"
+                              >
+                                {lead.fullName}
+                              </button>
                             </td>
                             <td className="py-3 px-4 text-sm text-slate-600">{lead.phone}</td>
                             <td className="py-3 px-4 text-sm text-slate-600">
@@ -524,19 +534,10 @@ export default function Customers() {
                             </td>
                             <td className="py-3 px-4">
                               {nextAction && (
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleLeadAction(lead)
-                                  }}
-                                  className="flex items-center gap-2"
-                                >
+                                <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
                                   {getNextActionIcon(lead.currentStatus)}
                                   {getNextActionLabel(lead.currentStatus)}
-                                  <ArrowRight className="h-3 w-3" />
-                                </Button>
+                                </div>
                               )}
                               {!nextAction && lead.currentStatus === 'closed_won' && (
                                 <span className="text-xs text-green-600 font-medium">Abgeschlossen</span>
