@@ -147,6 +147,12 @@ export default function Customers() {
     return leads.find((lead) => lead.id === selectedId) || fallback
   }, [leads, selectedId])
 
+  const resolvedModalLead = useMemo(() => {
+    if (modalLead) return modalLead
+    if (!modalLeadId || !leads) return null
+    return leads.find((lead) => lead.id === modalLeadId) || null
+  }, [leads, modalLead, modalLeadId])
+
   const filteredLeads = useMemo(() => {
     if (!leads) return []
     const needle = search.trim().toLowerCase()
@@ -566,7 +572,7 @@ export default function Customers() {
           isOpen={true}
           initialType={modalType}
           preSelectedLeadId={modalLeadId}
-          preSelectedLead={modalLead}
+          preSelectedLead={resolvedModalLead}
           onLeadCreated={(lead) => {
             setSelectedId(lead.id)
           }}

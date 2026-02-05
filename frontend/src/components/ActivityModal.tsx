@@ -96,6 +96,21 @@ const getNextStepLabel = (status?: string) => {
   }
 }
 
+const getDefaultCallOutcome = (lead?: Lead | null) =>
+  lead?.currentStatus === 'call_scheduled' ? 'call_scheduled' : 'answered'
+
+const buildDefaultCallData = (lead?: Lead | null) => ({
+  contactRef: '',
+  outcome: getDefaultCallOutcome(lead),
+  notes: '',
+  nextCallAt: '',
+  appointmentType: 'first',
+  appointmentDatetime: '',
+  appointmentMode: 'in_person' as AppointmentMode,
+  appointmentLocation: '',
+  leadOnly: false,
+})
+
 function ActivityModal({
   isOpen,
   initialType = 'call',
@@ -126,17 +141,8 @@ function ActivityModal({
     appointmentMode: AppointmentMode
     appointmentLocation: string
     leadOnly: boolean
-  }>({
-    contactRef: '',
-    outcome: 'call_scheduled',
-    notes: '',
-    nextCallAt: '',
-    appointmentType: 'first',
-    appointmentDatetime: '',
-    appointmentMode: 'in_person',
-    appointmentLocation: '',
-    leadOnly: false,
-  })
+  }>(buildDefaultCallData(preSelectedLead))
+  const [callOutcomeTouched, setCallOutcomeTouched] = useState(false)
 
   const [appointmentData, setAppointmentData] = useState<{
     type: string
@@ -174,17 +180,8 @@ function ActivityModal({
       setError(null)
       setClosingCongrats(null)
       setLeadsLoaded(false)
-      setCallData({
-        contactRef: '',
-        outcome: 'call_scheduled',
-        notes: '',
-        nextCallAt: '',
-        appointmentType: 'first',
-        appointmentDatetime: '',
-        appointmentMode: 'in_person',
-        appointmentLocation: '',
-        leadOnly: false,
-      })
+      setCallData(buildDefaultCallData(preSelectedLead))
+      setCallOutcomeTouched(false)
       setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'in_person', location: '' })
       setClosingData({ units: '', result: 'won', productCategory: '', notes: '' })
       setLeadData({ fullName: '', phone: '', email: '' })
@@ -246,6 +243,7 @@ function ActivityModal({
   }, [isOpen, preSelectedLeadId, preSelectedLead, selectedLeadId])
 
   const canCreateNewLead =
+    !(preSelectedLeadId || preSelectedLead) &&
     !(activityType === 'closing' || (activityType === 'appointment' && appointmentData.type === 'second'))
 
   const filteredLeads = useMemo(() => {
@@ -318,13 +316,19 @@ function ActivityModal({
     return leads.find((lead) => String(lead.id) === selectedLeadId) ?? null
   }, [leads, selectedLeadId])
 
+  const lockedLead = useMemo(() => {
+    if (preSelectedLead) return preSelectedLead
+    if (preSelectedLeadId && selectedLead) return selectedLead
+    return null
+  }, [preSelectedLead, preSelectedLeadId, selectedLead])
+
   const leadSelectOptions = useMemo(() => {
     const base = filteredLeads.map((lead) => ({
       value: String(lead.id),
       label: `${lead.fullName} • ${lead.phone}`,
     }))
     if (selectedLeadId && !base.some((opt) => opt.value === selectedLeadId)) {
-      const fallback = selectedLead || preSelectedLead
+      const fallback = selectedLead || lockedLead
       if (fallback) {
         base.unshift({
           value: String(fallback.id),
@@ -333,7 +337,7 @@ function ActivityModal({
       }
     }
     return base
-  }, [filteredLeads, selectedLeadId, selectedLead, preSelectedLead])
+  }, [filteredLeads, selectedLeadId, selectedLead, lockedLead])
 
   const minDateTime = useMemo(() => {
     const now = new Date()
@@ -351,6 +355,15 @@ function ActivityModal({
     setAppointmentData((prev) => ({ ...prev, type: preferredAppointmentType }))
     setCallData((prev) => ({ ...prev, appointmentType: preferredAppointmentType }))
   }, [preferredAppointmentType, selectedLead])
+
+  useEffect(() => {
+    if (!isOpen) return
+    if (callOutcomeTouched) return
+    const defaultOutcome = getDefaultCallOutcome(selectedLead ?? preSelectedLead ?? null)
+    if (callData.outcome !== defaultOutcome) {
+      setCallData((prev) => ({ ...prev, outcome: defaultOutcome }))
+    }
+  }, [callData.outcome, callOutcomeTouched, isOpen, preSelectedLead, selectedLead])
 
   const scheduledEntry = useMemo(() => {
     if (!selectedLead) return null
@@ -507,7 +520,7 @@ function ActivityModal({
 
     try {
       // WORKAROUND: Use preSelectedLead.id if available, otherwise fall back to selectedLeadId
-      let leadId = preSelectedLead?.id ?? (selectedLeadId ? Number(selectedLeadId) : null)
+      let leadId = lockedLead?.id ?? (selectedLeadId ? Number(selectedLeadId) : null)
       if (!leadId) {
         if (activityType === 'closing') {
           throw new Error('Abschluss kann nur für bestehende Leads erfasst werden')
@@ -731,17 +744,8 @@ function ActivityModal({
   }
 
   const resetForm = () => {
-    setCallData({
-      contactRef: '',
-      outcome: 'call_scheduled',
-      notes: '',
-      nextCallAt: '',
-      appointmentType: 'first',
-      appointmentDatetime: '',
-      appointmentMode: 'in_person',
-      appointmentLocation: '',
-      leadOnly: false,
-    })
+    setCallData(buildDefaultCallData(preSelectedLead))
+    setCallOutcomeTouched(false)
     setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'in_person', location: '' })
     setClosingData({ units: '', result: 'won', productCategory: '', notes: '' })
     setLeadData({ fullName: '', phone: '', email: '' })
@@ -798,16 +802,16 @@ function ActivityModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Lead</p>
-            {/* WORKAROUND: If preSelectedLead is provided, show it directly instead of dropdown */}
-            {preSelectedLead ? (
+            {/* If lead is locked (e.g. from "Nächste Aktion"), show it directly instead of dropdown */}
+            {lockedLead ? (
               <>
                 <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                  <p className="text-sm font-medium text-slate-900">{preSelectedLead.fullName}</p>
-                  <p className="text-xs text-slate-500">{preSelectedLead.phone}</p>
+                  <p className="text-sm font-medium text-slate-900">{lockedLead.fullName}</p>
+                  <p className="text-xs text-slate-500">{lockedLead.phone}</p>
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 flex items-center justify-between">
-                  <span>Status: {statusLabels[preSelectedLead.currentStatus] || preSelectedLead.currentStatus}</span>
-                  <span>Nächster Schritt: {getNextStepLabel(preSelectedLead.currentStatus)}</span>
+                  <span>Status: {statusLabels[lockedLead.currentStatus] || lockedLead.currentStatus}</span>
+                  <span>Nächster Schritt: {getNextStepLabel(lockedLead.currentStatus)}</span>
                 </div>
               </>
             ) : (
@@ -870,7 +874,10 @@ function ActivityModal({
               <Select
                 label="Ergebnis"
                 value={callData.outcome}
-                onChange={(e) => setCallData({ ...callData, outcome: e.target.value })}
+                onChange={(e) => {
+                  setCallOutcomeTouched(true)
+                  setCallData({ ...callData, outcome: e.target.value })
+                }}
                 options={callOutcomeOptions}
                 disabled={callData.leadOnly}
               />
