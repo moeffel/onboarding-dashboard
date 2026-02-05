@@ -256,6 +256,21 @@ export default function Customers() {
   const handleLeadAction = (lead: Lead) => {
     const action = getNextAction(lead.currentStatus)
     if (!action) return
+    if (typeof window !== 'undefined') {
+      try {
+        window.sessionStorage.setItem(
+          'customers:modalLead',
+          JSON.stringify({
+            id: lead.id,
+            fullName: lead.fullName,
+            phone: lead.phone,
+            currentStatus: lead.currentStatus,
+          })
+        )
+      } catch {
+        // Ignore storage errors and continue.
+      }
+    }
     setSelectedId(lead.id)
     setModalLeadId(lead.id)
     setModalLead(lead)

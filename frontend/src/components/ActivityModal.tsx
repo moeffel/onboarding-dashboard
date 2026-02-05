@@ -111,6 +111,38 @@ const buildDefaultCallData = (lead?: Lead | null) => ({
   leadOnly: false,
 })
 
+const getStoredModalLead = (): Lead | null => {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem('customers:modalLead')
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as {
+      id?: number
+      fullName?: string
+      phone?: string
+      currentStatus?: string
+    }
+    if (!parsed?.id || !parsed.fullName || !parsed.phone || !parsed.currentStatus) return null
+    const now = new Date().toISOString()
+    return {
+      id: parsed.id,
+      ownerUserId: 0,
+      teamId: 0,
+      fullName: parsed.fullName,
+      phone: parsed.phone,
+      email: null,
+      currentStatus: parsed.currentStatus as Lead['currentStatus'],
+      statusUpdatedAt: now,
+      lastActivityAt: null,
+      tags: [],
+      note: null,
+      createdAt: now,
+    }
+  } catch {
+    return null
+  }
+}
+
 function ActivityModal({
   isOpen,
   initialType = 'call',
@@ -127,6 +159,7 @@ function ActivityModal({
   const [leads, setLeads] = useState<Lead[]>(preSelectedLead ? [preSelectedLead] : [])
   const [leadsLoaded, setLeadsLoaded] = useState(false)
   const [calendarEntries, setCalendarEntries] = useState<CalendarEntry[]>([])
+  const [storedLead, setStoredLead] = useState<Lead | null>(null)
   const [selectedLeadId, setSelectedLeadId] = useState<string>(
     preSelectedLeadId ? String(preSelectedLeadId) : (preSelectedLead?.id ? String(preSelectedLead.id) : '')
   )
@@ -175,43 +208,49 @@ function ActivityModal({
 
   useEffect(() => {
     if (isOpen) {
+      const stored = getStoredModalLead()
+      setStoredLead(stored)
       const initialLeadId = preSelectedLeadId ?? preSelectedLead?.id ?? null
+      const fallbackLeadId = stored?.id ?? null
+      const resolvedLeadId = initialLeadId ?? fallbackLeadId
       setActivityType(initialType)
       setError(null)
       setClosingCongrats(null)
       setLeadsLoaded(false)
-      setCallData(buildDefaultCallData(preSelectedLead))
+      setCallData(buildDefaultCallData(preSelectedLead ?? stored))
       setCallOutcomeTouched(false)
       setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'in_person', location: '' })
       setClosingData({ units: '', result: 'won', productCategory: '', notes: '' })
       setLeadData({ fullName: '', phone: '', email: '' })
-      setSelectedLeadId(initialLeadId ? String(initialLeadId) : '')
-      setLeads(preSelectedLead ? [preSelectedLead] : [])
+      setSelectedLeadId(resolvedLeadId ? String(resolvedLeadId) : '')
+      setLeads(preSelectedLead ? [preSelectedLead] : (stored ? [stored] : []))
       setCalendarEntries([])
       // Pre-select lead if provided
       fetch('/api/leads', { credentials: 'include' })
         .then((res) => (res.ok ? res.json() : Promise.reject()))
         .then((data: Lead[]) => {
-          if (preSelectedLead && !data.some((lead) => lead.id === preSelectedLead.id)) {
-            setLeads([preSelectedLead, ...data])
+          const fallbackLead = preSelectedLead ?? stored
+          if (fallbackLead && !data.some((lead) => lead.id === fallbackLead.id)) {
+            setLeads([fallbackLead, ...data])
           } else {
             setLeads(data)
           }
           // Re-apply selectedLeadId after leads are loaded to ensure it's set
-          if (initialLeadId) {
-            setSelectedLeadId(String(initialLeadId))
+          if (resolvedLeadId) {
+            setSelectedLeadId(String(resolvedLeadId))
           }
           setLeadsLoaded(true)
         })
         .catch(() => {
           // Even on error, keep the preSelectedLead if provided
-          if (preSelectedLead) {
-            setLeads([preSelectedLead])
+          const fallbackLead = preSelectedLead ?? stored
+          if (fallbackLead) {
+            setLeads([fallbackLead])
           } else {
             setLeads([])
           }
-          if (initialLeadId) {
-            setSelectedLeadId(String(initialLeadId))
+          if (resolvedLeadId) {
+            setSelectedLeadId(String(resolvedLeadId))
           }
           setLeadsLoaded(true)
         })
@@ -243,7 +282,7 @@ function ActivityModal({
   }, [isOpen, preSelectedLeadId, preSelectedLead, selectedLeadId])
 
   const canCreateNewLead =
-    !(preSelectedLeadId || preSelectedLead) &&
+    !(preSelectedLeadId || preSelectedLead || storedLead) &&
     !(activityType === 'closing' || (activityType === 'appointment' && appointmentData.type === 'second'))
 
   const filteredLeads = useMemo(() => {
@@ -318,9 +357,10 @@ function ActivityModal({
 
   const lockedLead = useMemo(() => {
     if (preSelectedLead) return preSelectedLead
+    if (storedLead) return storedLead
     if (preSelectedLeadId && selectedLead) return selectedLead
     return null
-  }, [preSelectedLead, preSelectedLeadId, selectedLead])
+  }, [preSelectedLead, preSelectedLeadId, selectedLead, storedLead])
 
   const leadSelectOptions = useMemo(() => {
     const base = filteredLeads.map((lead) => ({
@@ -359,11 +399,19 @@ function ActivityModal({
   useEffect(() => {
     if (!isOpen) return
     if (callOutcomeTouched) return
-    const defaultOutcome = getDefaultCallOutcome(selectedLead ?? preSelectedLead ?? null)
+    const defaultOutcome = getDefaultCallOutcome(lockedLead ?? selectedLead ?? null)
     if (callData.outcome !== defaultOutcome) {
       setCallData((prev) => ({ ...prev, outcome: defaultOutcome }))
     }
-  }, [callData.outcome, callOutcomeTouched, isOpen, preSelectedLead, selectedLead])
+  }, [callData.outcome, callOutcomeTouched, isOpen, lockedLead, selectedLead])
+
+  useEffect(() => {
+    if (!isOpen) return
+    if (callOutcomeTouched) return
+    if (!selectedLeadId) {
+      setCallData((prev) => ({ ...prev, outcome: 'answered' }))
+    }
+  }, [callOutcomeTouched, isOpen, selectedLeadId])
 
   const scheduledEntry = useMemo(() => {
     if (!selectedLead) return null
@@ -744,7 +792,7 @@ function ActivityModal({
   }
 
   const resetForm = () => {
-    setCallData(buildDefaultCallData(preSelectedLead))
+    setCallData(buildDefaultCallData(lockedLead ?? preSelectedLead ?? storedLead))
     setCallOutcomeTouched(false)
     setAppointmentData({ type: 'first', result: 'set', notes: '', datetime: '', mode: 'in_person', location: '' })
     setClosingData({ units: '', result: 'won', productCategory: '', notes: '' })
